@@ -1,0 +1,2 @@
+# LISA
+LISA component is part of RDK DAC framework on STB. Its role is to retrieve, store and maintain DAC bundles and local applications' metadata. LISA is keeping track of what bundles are available locally and manages the local storage, both for downloadable bundles as well as persistent storage for the applications. LISA is an abbreviation from Local Inventory &amp; Storage Manager of DAC Apps.
