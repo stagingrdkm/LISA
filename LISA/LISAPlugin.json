@@ -1,0 +1,30 @@
+{
+    "$schema": "plugin.schema.json",
+    "jsonrpc":"2.0",
+    "info": {
+        "title": "Local Inventory & Storage Manager of DAC Apps (LISA) Plugin",
+        "class": "Lisa",
+        "callsign": "org.rdk.dac.lisa",
+        "locator": "libWPEFrameworkLISA.so",
+        "status": "alpha",
+        "autostart": true,
+        "description": [
+            "The Local Inventory & Storage Manager of DAC Apps (LISA) plugin allows authenticated downloading and management of DAC bundles from a remote server. It also manages the persistent storage of the DAC applications."
+        ],
+        "version": "1.0"
+    },
+    "interface": {
+        "$ref": "{interfacedir}/lisa.json"
+    },
+    "configuration": {
+        "storages": {
+            "apps": "/mnt/apps",
+            "apps_storage": "/mnt/apps_storage",
+            "apps_tmp": "/mnt/apps_tmp"
+        },
+        "network": {
+            "timeout": 1800,
+            "default_retryIn": 300
+        }
+    }
+}
