@@ -21,6 +21,8 @@ set(MODULE_NAME ${NAMESPACE}${PLUGIN_NAME})
 find_package(${NAMESPACE}Plugins REQUIRED)
 
 add_library(${MODULE_NAME} SHARED
+    LISA.cpp
+    LISAImplementation.cpp
     Module.cpp)
 
 set_target_properties(${MODULE_NAME} PROPERTIES
