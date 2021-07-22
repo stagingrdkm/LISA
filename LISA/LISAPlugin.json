@@ -25,6 +25,11 @@
         "network": {
             "timeout": 1800,
             "default_retryIn": 300
+        },
+        "dbpath": {
+            "type": "string",
+            "size": 16,
+            "description": "URI of the database."
         }
     }
 }

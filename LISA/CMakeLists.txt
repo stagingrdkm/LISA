@@ -23,14 +23,22 @@ find_package(${NAMESPACE}Plugins REQUIRED)
 add_library(${MODULE_NAME} SHARED
     LISA.cpp
     LISAImplementation.cpp
+    SqlDataStorage.cpp
+    LISAJsonRpc.cpp
     Module.cpp)
 
 set_target_properties(${MODULE_NAME} PROPERTIES
         CXX_STANDARD 11
         CXX_STANDARD_REQUIRED YES)
 
-target_link_libraries(${MODULE_NAME}
-    PRIVATE
+
+add_definitions(${SQLITE_CFLAGS_OTHER})
+
+link_directories(${SQLITE_LIBRARY_DIRS})
+
+target_include_directories(${MODULE_NAME} PRIVATE ${SQLITE_INCLUDE_DIRS})
+
+target_link_libraries(${MODULE_NAME} PRIVATE sqlite3
         ${NAMESPACE}Plugins::${NAMESPACE}Plugins)
 
 install(TARGETS ${MODULE_NAME}

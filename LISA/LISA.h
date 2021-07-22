@@ -20,11 +20,10 @@
 #pragma once
 #include "Module.h"
 #include <interfaces/json/JsonData_LISA.h>
-#include <interfaces/json/JLISA.h>
+#include <interfaces/ILISA.h>
 
 namespace WPEFramework {
 namespace Plugin {
-
 
 class LISA : public PluginHost::IPlugin, public PluginHost::JSONRPC {
     public:
@@ -61,6 +60,28 @@ class LISA : public PluginHost::IPlugin, public PluginHost::JSONRPC {
     private:
         uint32_t _connectionId;
         Exchange::ILISA* _lisa;
+
+        class Config : public Core::JSON::Container {
+            private:
+                Config(const Config&) = delete;
+                Config& operator=(const Config&) = delete;
+
+            public:
+                Config(): Core::JSON::Container(), DbPath()
+                {
+                    Add(_T("dbpath"), &DbPath);
+                }
+                virtual ~Config()
+                {
+                }
+
+            public:
+                Core::JSON::String DbPath;
+        };
+    // JSON-RPC
+    private:
+        void Register(PluginHost::JSONRPC& module, Exchange::ILISA* destination);
+        void Unregister(PluginHost::JSONRPC& module);
     };
 }
 }
