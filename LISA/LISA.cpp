@@ -29,8 +29,10 @@ namespace Plugin {
 
     const string LISA::Initialize(PluginHost::IShell* service) {
 
+        TRACE(Trace::Information, (_T("LISA::Initialize")));
+
         if (_lisa != nullptr) {
-            Exchange::JLISA::Unregister(*this);
+            Unregister(*this);
             _lisa->Release();
             _lisa = nullptr;
         }
@@ -39,10 +41,12 @@ namespace Plugin {
 
         _lisa = service->Root<Exchange::ILISA>(_connectionId, 2000, _T("LISAImplementation"));
         if (_lisa != nullptr) {
-            Exchange::JLISA::Register(*this, _lisa);
+            TRACE(Trace::Information, (_T("LISA::Initialize register JSON-RPC API")));
+            Register(*this, _lisa);
         }
 
         if (_lisa == nullptr) {
+            TRACE(Trace::Error, (_T("LISA::Initialize - LISA could not be instantiated.")));
             message = _T("LISA could not be instantiated.");
         }
 
@@ -51,10 +55,11 @@ namespace Plugin {
 
     void LISA::Deinitialize(PluginHost::IShell* service)
     {
+        TRACE(Trace::Information, (_T("LISA::Deinitialize")));
         ASSERT(_lisa != nullptr);
 
         if (_lisa != nullptr) {
-            Exchange::JLISA::Unregister(*this);
+            Unregister(*this);
             _lisa->Release();
             _lisa = nullptr;
         }
