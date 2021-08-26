@@ -17,6 +17,7 @@
  * limitations under the License.
  */
 
+#include "Executor.h"
 #include "Module.h"
 
 #include <interfaces/ILISA.h>
@@ -43,8 +44,7 @@ public:
             const std::string& category,
             std::string& handle /* @out */) override
     {
-        handle = "Install";
-        return Core::ERROR_NONE;
+        return executor.Install(type, id, version, url, appName, category, handle);
     }
 
     uint32_t Uninstall(const std::string& type,
@@ -53,8 +53,7 @@ public:
             const std::string& uninstallType,
             std::string& handle /* @out */) override
     {
-        handle = "Uninstall";
-        return Core::ERROR_NONE;
+        return executor.Uninstall(type, id, version, uninstallType, handle);
     }
 
     uint32_t Download(const std::string& type,
@@ -579,6 +578,8 @@ public:
         result = appsPayload;
         return Core::ERROR_NONE;
     }
+private:
+    LISA::Executor executor{};
 };
 
 SERVICE_REGISTRATION(LISAImplementation, 1, 0);
