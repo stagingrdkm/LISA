@@ -61,7 +61,7 @@ Downloader::Downloader(const std::string& uri)
     curl_easy_setopt(curl.get(), CURLOPT_TIMEOUT_MS, DEFAULT_TIMEOUT_MS);
 
     // parsing header is required "Retry-After" header
-    curl_easy_setopt(curl.get(), CURLOPT_HEADERDATA, nullptr);
+    curl_easy_setopt(curl.get(), CURLOPT_HEADERDATA, this);
     curl_easy_setopt(curl.get(), CURLOPT_HEADERFUNCTION, headerHandler);
 
     curl_easy_setopt(curl.get(), CURLOPT_SSL_VERIFYPEER, 1L);
@@ -69,43 +69,6 @@ Downloader::Downloader(const std::string& uri)
     curl_easy_setopt(curl.get(), CURLOPT_URL, uri.c_str());
 
     TRACE_L1("Downloader created, uri: %s", uri.c_str());
-}
-
-void Downloader::doRetryWait()
-{
-    auto retryTime = getRetryAfterTimeSec();
-    TRACE_L1("Retry-After received, wait time %d sec", static_cast<int>(retryTime.count()));
-    std::this_thread::sleep_for(retryTime);
-}
-
-void Downloader::performAction()
-{
-    while(true)
-    {
-        CURLcode result = curl_easy_perform(curl.get());
-
-        TRACE_L1("performed action result: %d", result);
-
-        if (result != CURLE_OK) {
-            std::string message = std::string{"download error "} + curl_easy_strerror(result);
-            throw DownloadError(message);
-            return;
-        }
-
-        long httpStatus{};
-        curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &httpStatus);
-
-        TRACE_L1("http response %ld", httpStatus);
-
-        if (httpStatus == HTTP_OK) {
-            break;
-        } else if (httpStatus == HTTP_ACCEPTED) {
-            doRetryWait();
-        } else {
-            std::string message = std::string{"http error "} + std::to_string(httpStatus);
-            throw DownloadError(message);
-        }
-    }
 }
 
 long Downloader::getContentLength()
@@ -130,6 +93,39 @@ void  Downloader::get(const Filesystem::File& destination)
     performAction();
 }
 
+void Downloader::performAction()
+{
+    while(true)
+    {
+        CURLcode result = curl_easy_perform(curl.get());
+
+        if (result != CURLE_OK) {
+            std::string message = std::string{"download error "} + curl_easy_strerror(result);
+            throw DownloadError(message);
+            return;
+        }
+
+        long httpStatus{};
+        curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &httpStatus);
+
+        if (httpStatus == HTTP_OK) {
+            break;
+        } else if (httpStatus == HTTP_ACCEPTED) {
+            doRetryWait();
+        } else {
+            std::string message = std::string{"http error "} + std::to_string(httpStatus);
+            throw DownloadError(message);
+        }
+    }
+}
+
+void Downloader::doRetryWait()
+{
+    auto retryTime = getRetryAfterTimeSec();
+    TRACE_L1("Retry-After received, wait time %d sec", static_cast<int>(retryTime.count()));
+    std::this_thread::sleep_for(retryTime);
+}
+
 std::chrono::seconds Downloader::getRetryAfterTimeSec()
 {
 //    curl_off_t waitTime{DEFAULT_RETRY_IN};
@@ -145,8 +141,11 @@ size_t Downloader::headerHandler(void* ptr, size_t size, size_t nmemb, void* use
 {
     std::string headerLine{static_cast<char*>(ptr), static_cast<char*>(ptr) + nmemb};
 
-    auto pos = headerLine.find_last_of("Retry-After:") ;
+    const std::string retryAfterPrefix{"Retry-After:"};
+    auto pos = headerLine.find(retryAfterPrefix) ;
+
     if (pos != std::string::npos) {
+        pos += retryAfterPrefix.length();
         // TODO add parsing Date
         auto parsedValue{0};
         try {
@@ -156,7 +155,7 @@ size_t Downloader::headerHandler(void* ptr, size_t size, size_t nmemb, void* use
             // noop
         }
 
-        if (parsedValue != 0) {
+        if (parsedValue >= 0) {
             auto downloader = static_cast<Downloader*>(userData);
             downloader->onRetryAfter(parsedValue);
         }
@@ -191,5 +190,4 @@ bool Downloader::onProgress(long dlTotal, long dlNow)
 } // namespace LISA
 } // namespace Plugin
 } // namespace WPEFramework
-
 

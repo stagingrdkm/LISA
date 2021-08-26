@@ -65,12 +65,9 @@ public:
     void get(const Filesystem::File& destination);
 
 private:
-    void doRetryWait();
     void performAction();
+    void doRetryWait();
     std::chrono::seconds getRetryAfterTimeSec();
-
-    static constexpr int HTTP_OK{200};
-    static constexpr int HTTP_ACCEPTED{202};
 
     static size_t headerHandler(void* ptr, size_t size, size_t nmemb, void* userData);
     void onRetryAfter(long newRetryAfterMs);
@@ -81,6 +78,9 @@ private:
                               curl_off_t ultotal,
                               curl_off_t ulnow);
     bool onProgress(long dlTotal, long dlNow);
+
+    static constexpr int HTTP_OK{200};
+    static constexpr int HTTP_ACCEPTED{202};
 
     using CURLPtr = std::unique_ptr<CURL, CurlDeleter>;
     CURLPtr curl{nullptr};

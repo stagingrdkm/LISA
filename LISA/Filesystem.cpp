@@ -30,13 +30,13 @@ namespace Filesystem {
 
 namespace { // anonymous
 
-//const std::string APPS_DIR = "/mnt/apps/";
-//const std::string APPS_TMP_DIR = APPS_DIR + "tmp/";
-//const std::string APPS_STORAGE_DIR = "/mnt/apps_storage/";
+const std::string APPS_DIR = "/mnt/apps/";
+const std::string APPS_TMP_DIR = "/mnt/apps/tmp/";
+const std::string APPS_STORAGE_DIR = "/mnt/apps_storage/";
 
-const std::string APPS_DIR = "/tmp/apps/";
-const std::string APPS_TMP_DIR = "/tmp/";
-const std::string APPS_STORAGE_DIR = "/tmp/apps_storage/";
+//const std::string APPS_DIR = "/tmp/apps/";
+//const std::string APPS_TMP_DIR = "/tmp/";
+//const std::string APPS_STORAGE_DIR = "/tmp/apps_storage/";
 
 
 void normalizeName(std::string& str)
@@ -79,7 +79,7 @@ bool directoryExists(const std::string& path)
         dirExists = boost::filesystem::exists(path);
     }
     catch(boost::filesystem::filesystem_error& error) {
-        std::string message = std::string{} + "error " + error.what() + " checking if directory " + path + "exists";
+        std::string message = std::string{} + error.what() + " checking if directory exists";
         throw FilesystemError(message);
     }
 
@@ -94,7 +94,7 @@ bool createDirectory(const std::string& path)
         result = boost::filesystem::create_directories(path);
     }
     catch(boost::filesystem::filesystem_error& error) {
-        std::string message = std::string{} + "error " + error.what() + " creating directory " + path;
+        std::string message = std::string{} + "error " + error.what() + " creating directory";
         throw FilesystemError(message);
     }
 

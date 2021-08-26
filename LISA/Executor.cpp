@@ -52,14 +52,18 @@ bool isAppInstalled(const std::string& type,
     auto appSubPath = Filesystem::createAppPath(type, id, version);
 
     const std::string appDir = Filesystem::getAppsDir() + appSubPath;
-    if (Filesystem::directoryExists(appDir)){
-        TRACE_L1("directory %s found, assuming application installed", appDir.c_str());
-        return true;
+
+    auto result{false};
+    try {
+        result = Filesystem::directoryExists(appDir);
+        TRACE_L1("directory %s %s found", appDir.c_str(), (result ? "" : "not"));
     }
-    else {
-        TRACE_L1("directory %s not found, assuming application not installed", appDir.c_str());
-        return false;
+    catch(std::exception& exc) {
+        TRACE_L1("%s", exc.what());
     }
+
+    TRACE_L1("assuming app %s installed", (result ? "" : "not"));
+    return result;
 }
 
 std::string generateHandle()

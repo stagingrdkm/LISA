@@ -57,6 +57,10 @@ bool directoryExists(const std::string& path);
 bool createDirectory(const std::string& path);
 void removeDirectory(const std::string& path);
 
+/**
+ * Helper class for temporary directories rolling back changes.
+ * Upon destruction will remove created directory 'commit' wasn't called.
+ */
 class ScopedDir
 {
 public:
