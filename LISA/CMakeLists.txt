@@ -19,8 +19,18 @@ set(PLUGIN_NAME LISA)
 set(MODULE_NAME ${NAMESPACE}${PLUGIN_NAME})
 
 find_package(${NAMESPACE}Plugins REQUIRED)
+find_package(${NAMESPACE}Definitions REQUIRED)
+find_package(CompileSettingsDebug CONFIG REQUIRED)
+find_package(CURL REQUIRED)
+find_package(LibArchive REQUIRED)
+find_package(Boost COMPONENTS system filesystem REQUIRED)
 
 add_library(${MODULE_NAME} SHARED
+    Archive.cpp
+    Downloader.cpp
+    Executor.cpp
+    File.cpp
+    Filesystem.cpp
     LISA.cpp
     LISAImplementation.cpp
     LISAJsonRpc.cpp
@@ -31,8 +41,12 @@ set_target_properties(${MODULE_NAME} PROPERTIES
         CXX_STANDARD_REQUIRED YES)
 
 target_link_libraries(${MODULE_NAME}
-    PRIVATE
-        ${NAMESPACE}Plugins::${NAMESPACE}Plugins)
+    PRIVATE ${NAMESPACE}Plugins::${NAMESPACE}Plugins
+    PRIVATE ${CURL_LIBRARIES}
+    PRIVATE ${LibArchive_LIBRARIES}
+    PRIVATE ${Boost_FILESYSTEM_LIBRARY}
+    PRIVATE ${Boost_SYSTEM_LIBRARY}
+)
 
 install(TARGETS ${MODULE_NAME}
     DESTINATION lib/${STORAGE_DIRECTORY}/plugins)
