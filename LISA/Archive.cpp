@@ -89,7 +89,6 @@ public:
             auto extractStatus = archive_read_extract(theArchive, entry, flags);
             if (extractStatus == ARCHIVE_OK) {
                 TRACE_L1("extracted: %s", archive_entry_pathname(entry));
-                continue;
             } else {
                 std::string message = std::string{} + "error while extracting " + archive_error_string(theArchive);
                 throw ArchiveError(message);

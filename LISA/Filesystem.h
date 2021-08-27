@@ -58,8 +58,8 @@ bool createDirectory(const std::string& path);
 void removeDirectory(const std::string& path);
 
 /**
- * Helper class for temporary directories rolling back changes.
- * Upon destruction will remove created directory 'commit' wasn't called.
+ * Helper class for temporary directories and rolling back changes.
+ * Upon destruction will remove created directory if 'commit' wasn't called.
  */
 class ScopedDir
 {

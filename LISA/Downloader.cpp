@@ -102,7 +102,6 @@ void Downloader::performAction()
         if (result != CURLE_OK) {
             std::string message = std::string{"download error "} + curl_easy_strerror(result);
             throw DownloadError(message);
-            return;
         }
 
         long httpStatus{};
