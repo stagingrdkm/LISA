@@ -32,12 +32,7 @@ namespace { // anonymous
 
 const std::string APPS_DIR = "/mnt/apps/";
 const std::string APPS_TMP_DIR = "/mnt/apps/tmp/";
-const std::string APPS_STORAGE_DIR = "/mnt/apps_storage/";
-
-//const std::string APPS_DIR = "/tmp/apps/";
-//const std::string APPS_TMP_DIR = "/tmp/";
-//const std::string APPS_STORAGE_DIR = "/tmp/apps_storage/";
-
+const std::string APPS_STORAGE_DIR = "/mnt/data/";
 
 void normalizeName(std::string& str)
 {
