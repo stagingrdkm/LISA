@@ -207,12 +207,17 @@ void Executor::doInstall(std::string type,
 
     // TODO check authentication method
 
+    auto appSubPath = Filesystem::createAppPath(type, id, version);
+    TRACE_L1("appSubPath (normalized): %s", appSubPath.c_str());
+
+    auto tmpPath = Filesystem::getAppsTmpDir();
+    auto tmpDirPath = tmpPath + appSubPath;
+    Filesystem::ScopedDir scopedTmpDir{tmpDirPath};
+
     Downloader downloader{url};
 
     auto downloadSize = downloader.getContentLength();
-
-    auto tmpPath = Filesystem::getAppsTmpDir();
-    auto tmpFreeSpace = Filesystem::getFreeSpace(tmpPath);
+    auto tmpFreeSpace = Filesystem::getFreeSpace(tmpDirPath);
 
     TRACE_L1("download size: %ld tmp(%s) space: %ld", downloadSize, tmpPath.c_str(), tmpFreeSpace);
 
@@ -222,13 +227,7 @@ void Executor::doInstall(std::string type,
         throw std::runtime_error(message);
     }
 
-    auto appSubPath = Filesystem::createAppPath(type, id, version);
-    TRACE_L1("appSubPath (normalized): %s", appSubPath.c_str());
-
-    auto tmpDir = tmpPath + appSubPath;
-    Filesystem::ScopedDir scopedTmpDir{tmpDir};
-
-    auto tmpFilePath = tmpDir + extractFilename(url);
+    auto tmpFilePath = tmpDirPath + extractFilename(url);
     Filesystem::File tmpFile{tmpFilePath};
 
     downloader.get(tmpFile);
@@ -241,7 +240,7 @@ void Executor::doInstall(std::string type,
     Archive::unpack(tmpFilePath, appsPath);
 
     auto appStoragePath = Filesystem::getAppsStorageDir() + appSubPath;
-    TRACE_L1("creating storage %s ", appsPath.c_str());
+    TRACE_L1("creating storage %s ", appStoragePath.c_str());
     Filesystem::ScopedDir scopedAppStorageDir{appStoragePath};
 
     // everything went fine, mark app directories to not be removed
