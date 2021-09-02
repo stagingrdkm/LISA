@@ -24,6 +24,7 @@ find_package(CompileSettingsDebug CONFIG REQUIRED)
 find_package(CURL REQUIRED)
 find_package(LibArchive REQUIRED)
 find_package(Boost COMPONENTS system filesystem REQUIRED)
+pkg_search_module(SQLITE REQUIRED sqlite3)
 
 add_library(${MODULE_NAME} SHARED
     Archive.cpp
@@ -33,6 +34,7 @@ add_library(${MODULE_NAME} SHARED
     Filesystem.cpp
     LISA.cpp
     LISAImplementation.cpp
+    SqlDataStorage.cpp
     LISAJsonRpc.cpp
     Module.cpp)
 
@@ -46,6 +48,7 @@ target_link_libraries(${MODULE_NAME}
     PRIVATE ${LibArchive_LIBRARIES}
     PRIVATE ${Boost_FILESYSTEM_LIBRARY}
     PRIVATE ${Boost_SYSTEM_LIBRARY}
+    PRIVATE ${SQLITE_LIBRARIES}
 )
 
 install(TARGETS ${MODULE_NAME}

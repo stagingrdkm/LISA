@@ -17,6 +17,7 @@
  * limitations under the License.
  */
 
+#include <string>
 #include "LISA.h"
 
 const short WPEFramework::Plugin::LISA::API_VERSION_NUMBER_MAJOR = 1;
@@ -41,6 +42,10 @@ namespace Plugin {
 
         _lisa = service->Root<Exchange::ILISA>(_connectionId, 2000, _T("LISAImplementation"));
         if (_lisa != nullptr) {
+            Config config;
+            config.FromString(service->ConfigLine());
+            std::string path = (config.DbPath.IsSet() && !config.DbPath.Value().empty()) ? config.DbPath.Value() : service->PersistentPath();
+            _lisa->Configure(path);
             TRACE(Trace::Information, (_T("LISA::Initialize register JSON-RPC API")));
             Register(*this, _lisa);
         }

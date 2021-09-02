@@ -19,8 +19,12 @@
 
 #include "Executor.h"
 #include "Module.h"
+#include "SqlDataStorage.h"
+#include "Filesystem.h"
 
 #include <interfaces/ILISA.h>
+#include <memory>
+#include <string>
 
 namespace WPEFramework {
 namespace Plugin {
@@ -28,7 +32,6 @@ namespace Plugin {
 class LISAImplementation : public Exchange::ILISA {
 public:
     LISAImplementation() = default;
-
     LISAImplementation(const LISAImplementation&) = delete;
     LISAImplementation& operator= (const LISAImplementation&) = delete;
 
@@ -209,6 +212,20 @@ public:
     uint32_t GetProgress(const std::string& handle, uint32_t& progress) override
     {
         progress = 75;
+        return Core::ERROR_NONE;
+    }
+
+    uint32_t Configure(const std::string& dbpath) override
+    {
+        std::string path = dbpath + '/' + LISA::Filesystem::LISA_EPOCH;
+        try {
+            LISA::Filesystem::createDirectory(path);
+            ds = std::unique_ptr<LISA::SqlDataStorage>(new LISA::SqlDataStorage(path));
+            ds->Initialize();
+        } catch (LISA::Filesystem::FilesystemError& error) {
+            TRACE(Trace::Error, (_T("Unable to create database directory: %s"), error.what()));
+            return Core::ERROR_GENERAL;
+        }
         return Core::ERROR_NONE;
     }
 
@@ -580,6 +597,7 @@ public:
     }
 private:
     LISA::Executor executor{};
+    std::unique_ptr<LISA::DataStorage> ds;
 };
 
 SERVICE_REGISTRATION(LISAImplementation, 1, 0);
