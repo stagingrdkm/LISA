@@ -24,6 +24,7 @@
 ******************************************************************************/
 
 #include "Downloader.h"
+#include "Debug.h"
 
 #include <cassert>
 
@@ -42,7 +43,9 @@ struct CurlLazyInitializer
 
 } // namespace anonymous
 
-Downloader::Downloader(const std::string& uri)
+Downloader::Downloader(const std::string& uri, ProgressListener listener)
+        :
+        progressListener{listener}
 {
     static CurlLazyInitializer lazyInit;
 
@@ -52,6 +55,7 @@ Downloader::Downloader(const std::string& uri)
     assert(curl && "Error initializing curl");
 
     curl_easy_setopt(curl.get(), CURLOPT_XFERINFOFUNCTION, curlProgressCb);
+    curl_easy_setopt(curl.get(), CURLOPT_XFERINFODATA, this);
     // needed to make progress callback get called
     curl_easy_setopt(curl.get(), CURLOPT_NOPROGRESS, 0L);
 
@@ -68,7 +72,7 @@ Downloader::Downloader(const std::string& uri)
 
     curl_easy_setopt(curl.get(), CURLOPT_URL, uri.c_str());
 
-    TRACE_L1("Downloader created, uri: %s", uri.c_str());
+    INFO("Downloader created, uri: ", uri);
 }
 
 long Downloader::getContentLength()
@@ -83,9 +87,9 @@ long Downloader::getContentLength()
     return static_cast<long>(curlContentLength);
 }
 
-void  Downloader::get(const Filesystem::File& destination)
+void Downloader::get(const Filesystem::File& destination)
 {
-    TRACE_L1("downloading...");
+    INFO("downloading...");
 
     curl_easy_setopt(curl.get(), CURLOPT_NOBODY, 0);
     curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, destination.getHandle());
@@ -121,7 +125,7 @@ void Downloader::performAction()
 void Downloader::doRetryWait()
 {
     auto retryTime = getRetryAfterTimeSec();
-    TRACE_L1("Retry-After received, wait time %d sec", static_cast<int>(retryTime.count()));
+    INFO("Retry-After received, wait time ", retryAfterTime);
     std::this_thread::sleep_for(retryTime);
 }
 
@@ -164,15 +168,16 @@ size_t Downloader::headerHandler(void* ptr, size_t size, size_t nmemb, void* use
 
 void Downloader::onRetryAfter(long newRetryAfterSec)
 {
-    TRACE_L1("Retry-After changed, old %d new %ld", static_cast<int>(retryAfterTime.count()), newRetryAfterSec);
+    auto oldRetryAfterTime = retryAfterTime;
     retryAfterTime = std::chrono::seconds(newRetryAfterSec);
+    INFO("Retry-After changed, old=", oldRetryAfterTime, " new=", retryAfterTime);
 }
 
 int Downloader::curlProgressCb(void* userData,
                                curl_off_t dltotal,
                                curl_off_t dlnow,
-                               curl_off_t ultotal,
-                               curl_off_t ulnow)
+                               curl_off_t /* ultotal */,
+                               curl_off_t /* ulnow */)
 {
     auto downloader = static_cast<Downloader*>(userData);
     // If non-zero value is returned - abort transfer with CURLE_ABORTED_BY_CALLBACK.
@@ -181,9 +186,21 @@ int Downloader::curlProgressCb(void* userData,
 
 bool Downloader::onProgress(long dlTotal, long dlNow)
 {
-    TRACE_L1("downloaded: %ld/%ld", dlNow, dlTotal);
-    // TODO progress notification
+    Progress newProgres = {dlTotal, dlNow};
+    if (newProgres != progress) {
+        progress = newProgres;
+        INFO("download progress ", progress);
+        if (progressListener) {
+            progressListener(progress.percent());
+        }
+    }
+    // TODO check if download should be canceled
     return false;
+}
+
+std::ostream& operator<<(std::ostream& out, const Downloader::Progress& progress)
+{
+    return out << progress.percent() << "% [" << progress.now << "/" << progress.total << "]";
 }
 
 } // namespace LISA

@@ -211,8 +211,7 @@ public:
 
     uint32_t GetProgress(const std::string& handle, uint32_t& progress) override
     {
-        progress = 75;
-        return Core::ERROR_NONE;
+        return executor.GetProgress(handle, progress);
     }
 
     uint32_t Configure(const std::string& dbpath) override

@@ -23,40 +23,80 @@
 * OF USING, MODIFYING OR DISTRIBUTING THIS SOFTWARE OR ITS DERIVATIVES.
 ******************************************************************************/
 
-#include "File.h"
+#pragma once
 
-#include <cassert>
+#include <ostream>
+#include <type_traits>
+
+#include "Module.h"
 
 namespace WPEFramework {
 namespace Plugin {
 namespace LISA {
-namespace Filesystem {
 
-File::File(const std::string& path)
+/** INTERNAL HELPERS *******************************************************************/
+
+inline void lisaInternalMakeLogMessage(std::ostream&) {}
+
+template <class A, class... Args>
+void lisaInternalMakeLogMessage(std::ostream& os, A&& a, Args&&... args)
 {
-    if (! path.empty()) {
-        file = fopen(path.c_str(), "w");
-    }
+    lisaInternalMakeLogMessage(os << a, std::forward<Args>(args)...);
 }
 
-File::~File()
+template <class Level, class... Args>
+void lisaInternalMakeLogMessage(Args&&... args)
 {
-    if (file) {
-        fclose(file);
-    }
+    std::ostringstream os;
+    lisaInternalMakeLogMessage(os, std::forward<Args>(args)...);
+    std::string str = os.str();
 }
 
-void* File::getHandle() const
-{
-    return reinterpret_cast<void*>(file);
+#define LOG_INTERNAL(...)  \
+    std::ostringstream os; \
+    lisaInternalMakeLogMessage(os, __VA_ARGS__); \
+    std::string str = os.str();
+
+/** INTERNAL HELPERS END ***************************************************************/
+
+
+#define INFO(...) { \
+    LOG_INTERNAL(__VA_ARGS__) \
+    TRACE_GLOBAL(Trace::Information, ("%s", str.c_str())); \
 }
 
-} // namespace Filesystem
+#define INFO_THIS(...) { \
+    LOG_INTERNAL(__VA_ARGS__) \
+    TRACE(Trace::Information, ("%s", str.c_str())); \
+}
+
+#define ERROR(...) { \
+    LOG_INTERNAL(__VA_ARGS__) \
+    TRACE_GLOBAL(Trace::Error, ("%s", str.c_str())); \
+}
+
+// operator<<'s for debugging purposes
+
+inline std::ostream& operator<<(std::ostream& out, std::chrono::seconds time)
+{
+    return out << time << " seconds";
+}
+
+template<class T>
+std::ostream& operator<<(std::ostream& out, std::function<T> function)
+{
+    return out << "function(" << ((void*)&function) << ")";
+}
+
+template <class T>
+constexpr typename std::underlying_type<T>::type enumToInt(T e)
+{
+    static_assert(std::is_enum<T>::value, "Given argument type is not enum");
+    return static_cast<typename std::underlying_type<T>::type>(e);
+}
+
 } // namespace LISA
 } // namespace Plugin
 } // namespace WPEFramework
-
-
-
 
 

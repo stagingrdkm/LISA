@@ -24,8 +24,7 @@
 ******************************************************************************/
 
 #include "Archive.h"
-
-#include <Module.h>
+#include "Debug.h"
 
 #include <archive.h>
 #include <archive_entry.h>
@@ -53,7 +52,7 @@ public:
             std::string message = std::string{} + "error opening file " + archive_error_string(theArchive);
             throw ArchiveError(message);
         }
-        TRACE_L1("archive opened %s", filePath.c_str());
+        INFO("archive opened ", filePath);
     }
 
     Archive(const Archive& other) = delete;
@@ -76,7 +75,7 @@ public:
             auto readHeaderResult = archive_read_next_header(theArchive, &entry);
 
             if (readHeaderResult == ARCHIVE_EOF) {
-                TRACE_L1("archive read successfully");
+                INFO("archive read successfully");
                 break;
             } else if (readHeaderResult != ARCHIVE_OK) {
                 std::string message = std::string{} + "error while reading entry " + archive_error_string(theArchive);
@@ -88,7 +87,7 @@ public:
 
             auto extractStatus = archive_read_extract(theArchive, entry, flags);
             if (extractStatus == ARCHIVE_OK) {
-                TRACE_L1("extracted: %s", archive_entry_pathname(entry));
+                INFO("extracted: ", archive_entry_pathname(entry));
             } else {
                 std::string message = std::string{} + "error while extracting " + archive_error_string(theArchive);
                 throw ArchiveError(message);
