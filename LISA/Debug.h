@@ -59,21 +59,20 @@ void lisaInternalMakeLogMessage(Args&&... args)
 
 /** INTERNAL HELPERS END ***************************************************************/
 
-
-#define INFO(...) { \
+#define INFO(...) do { \
     LOG_INTERNAL(__VA_ARGS__) \
     TRACE_GLOBAL(Trace::Information, ("%s", str.c_str())); \
-}
+    } while(0)
 
-#define INFO_THIS(...) { \
+#define INFO_THIS(...) do { \
     LOG_INTERNAL(__VA_ARGS__) \
     TRACE(Trace::Information, ("%s", str.c_str())); \
-}
+    } while(0)
 
-#define ERROR(...) { \
+#define ERROR(...) do { \
     LOG_INTERNAL(__VA_ARGS__) \
     TRACE_GLOBAL(Trace::Error, ("%s", str.c_str())); \
-}
+    } while(0)
 
 // operator<<'s for debugging purposes
 
