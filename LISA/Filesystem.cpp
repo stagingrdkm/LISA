@@ -18,8 +18,7 @@
  */
 
 #include "Filesystem.h"
-
-#include <Module.h>
+#include "Debug.h"
 
 #include <boost/filesystem.hpp>
 
@@ -112,7 +111,7 @@ ScopedDir::ScopedDir(const std::string& path)
 
     dirExists = createDirectory(path);
 
-    TRACE_L1("path %s existing dir: %s", path.c_str(), dirToRemove.c_str());
+    INFO("path ", path, " existing dir: ", dirToRemove);
 }
 
 ScopedDir::~ScopedDir()
@@ -134,7 +133,7 @@ bool ScopedDir::exists() const
 
 void removeDirectory(const std::string& path)
 {
-    TRACE_L1("removing directory %s", path.c_str());
+    INFO("removing directory ", path);
 
     try {
         boost::filesystem::remove_all(path);

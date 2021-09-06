@@ -45,6 +45,8 @@ public:
             const std::string& uninstallType,
             std::string& handle);
 
+    uint32_t GetProgress(const std::string& handle, std::uint32_t& progress);
+
 private:
 
     bool isWorkerBusy() const;
@@ -63,10 +65,27 @@ private:
                      std::string version,
                      std::string uninstallType);
 
+    enum class OperationStage {
+        DOWNLOADING,
+        UNTARING,
+        UPDATING_DATABASE,
+        FINISHED,
+
+        COUNT
+    };
+    friend std::ostream& operator<<(std::ostream& out, OperationStage stage);
+    void setProgress(int percentValue, OperationStage stage);
+
     using LockGuard = std::lock_guard<std::mutex>;
 
-    std::string currentHandle{};
-    std::mutex workerMutex{};
+    struct Task {
+        std::string handle{};
+        int progress{0};
+    };
+    friend std::ostream& operator<<(std::ostream& out, const Task& task);
+
+    Task currentTask{};
+    std::mutex taskMutex{};
     std::thread worker{};
 
 };

@@ -27,9 +27,6 @@
 
 #include "File.h"
 
-// TODO for logging macros, maybe it should be some logging specific header
-#include "Module.h"
-
 #include <curl/curl.h>
 
 #include <memory>
@@ -59,7 +56,9 @@ public:
 class Downloader
 {
 public:
-    Downloader(const std::string& uri);
+    using ProgressListener = std::function<void(int)>;
+
+    Downloader(const std::string& uri, ProgressListener listner);
 
     long getContentLength();
     void get(const Filesystem::File& destination);
@@ -84,6 +83,21 @@ private:
 
     using CURLPtr = std::unique_ptr<CURL, CurlDeleter>;
     CURLPtr curl{nullptr};
+
+    struct Progress {
+        long total;
+        long now;
+        bool operator!=(const Progress& other) const {
+            return (total != other.total) || (now != other.now);
+        }
+        int percent() const {
+            return total == 0 ? 0 : (static_cast<int>((static_cast<double>(now) * 100) / total));
+        }
+    };
+    friend std::ostream& operator<<(std::ostream& out, const Progress& progress);
+    Progress progress{};
+
+    ProgressListener progressListener{};
 
     // TODO read from config
     static auto constexpr DEFAULT_RETRY_AFTER{300};

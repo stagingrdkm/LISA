@@ -20,11 +20,11 @@
 #include "Executor.h"
 
 #include "Archive.h"
+#include "Debug.h"
 #include "Downloader.h"
 #include "Filesystem.h"
 
-#include "Module.h"
-
+#include <array>
 #include <cassert>
 #include <random>
 
@@ -56,13 +56,13 @@ bool isAppInstalled(const std::string& type,
     auto result{false};
     try {
         result = Filesystem::directoryExists(appDir);
-        TRACE_L1("directory %s %s found", appDir.c_str(), (result ? "" : "not"));
+        INFO("directory ", appDir, " ", (result ? "" : "not"), " found");
     }
     catch(std::exception& exc) {
-        TRACE_L1("%s", exc.what());
+        ERROR(exc.what());
     }
 
-    TRACE_L1("assuming app %s installed", (result ? "" : "not"));
+    INFO("assuming app ", (result ? "" : "not "), "installed");
     return result;
 }
 
@@ -88,8 +88,7 @@ uint32_t Executor::Install(const std::string& type,
                            const std::string& category,
                            std::string& handle)
 {
-    TRACE_L1("type=%s id=%s version=%s url=%s appName=%s cat=%s", type.c_str(), id.c_str(), version.c_str(),
-        url.c_str(), appName.c_str(), category.c_str());
+    INFO("type=", type, " id=", id, " version=", version, " url=", url, " appName=", appName, " cat=", category);
 
     // TODO what are param requirements?
     if (false /* checkParams() */ ) {
@@ -102,22 +101,22 @@ uint32_t Executor::Install(const std::string& type,
         return ERROR_ALREADY_INSTALLED;
     }
 
-    LockGuard lock(workerMutex);
+    LockGuard lock(taskMutex);
     if (isWorkerBusy()) {
         handle = "TooManyRequests";
         return ERROR_TOO_MANY_REQUESTS;
     }
 
-    currentHandle = generateHandle();
+    currentTask.handle = generateHandle();
 
     executeTask([=] {
-        TRACE_L1("executing doInstall");
+        INFO("executing doInstall");
         doInstall(type, id, version, url, appName, category);
     });
 
-    TRACE_L1("task scheduled, handle %s", currentHandle.c_str());
+    INFO(currentTask, " scheduled ");
 
-    handle = currentHandle;
+    handle = currentTask.handle;
     return ERROR_NONE;
 }
 
@@ -127,8 +126,7 @@ uint32_t Executor::Uninstall(const std::string& type,
         const std::string& uninstallType,
         std::string& handle)
 {
-    TRACE_L1("type=%s id=%s version=%s uninstallType=%s", type.c_str(), id.c_str(), version.c_str(),
-        uninstallType.c_str());
+    INFO("type=", type, " id=", id, " version=", version, " uninstallType=", uninstallType);
 
     // TODO what are param requirements?
     if (uninstallType != "full" && uninstallType != "upgrade") {
@@ -141,25 +139,35 @@ uint32_t Executor::Uninstall(const std::string& type,
         return ERROR_WRONG_PARAMS;
     }
 
-    LockGuard lock(workerMutex);
+    LockGuard lock(taskMutex);
     if (isWorkerBusy()) {
         handle = "TooManyRequests";
         return ERROR_TOO_MANY_REQUESTS;
     }
 
-    currentHandle = generateHandle();
+    currentTask.handle = generateHandle();
 
     executeTask([=] {
-        TRACE_L1("executing doUninstall");
+        INFO("executing doUninstall");
         doUninstall(type, id, version, uninstallType);
     });
 
     return ERROR_NONE;
 }
 
+uint32_t Executor::GetProgress(const std::string& handle, std::uint32_t& progress)
+{
+    LockGuard lock(taskMutex);
+    if (handle != currentTask.handle) {
+        return ERROR_WRONG_PARAMS;
+    }
+    progress = currentTask.progress;
+    return ERROR_NONE;
+}
+
 bool Executor::isWorkerBusy() const
 {
-    return ! currentHandle.empty();
+    return ! currentTask.handle.empty();
 }
 
 void Executor::executeTask(std::function<void()> task)
@@ -175,25 +183,25 @@ void Executor::executeTask(std::function<void()> task)
 
 void Executor::taskRunner(std::function<void()> task)
 {
-    TRACE_L1("task started %p", task);
+    INFO(task, " started ");
     try {
         task();
         // TODO send status "Done"
-        TRACE_L1("task %p done", task);
+        INFO(task, " done");
     }
     catch(std::exception& exc){
-        TRACE_L1("exception running task %p: %s", task, exc.what());
+        ERROR("exception running ", task, ": ", exc.what());
         // TODO send status "Failed"
     }
     catch(...){
-        TRACE_L1("exception ...  running task %p: ", task);
+        ERROR("exception ...  running ", task);
         // TODO send status "Failed"
     }
 
 
-    LockGuard lock(workerMutex);
-    TRACE_L1("scheduled task done, handle %s", currentHandle.c_str());
-    currentHandle.clear();
+    LockGuard lock(taskMutex);
+    INFO("scheduled ", currentTask, " done");
+    currentTask = Task{};
 }
 
 void Executor::doInstall(std::string type,
@@ -203,23 +211,27 @@ void Executor::doInstall(std::string type,
                          std::string appName,
                          std::string category)
 {
-    TRACE_L1("url=%s appName=%s cat=%s  %p", url.c_str(), appName.c_str(), category.c_str(), this);
+    INFO("url=", url, " appName=", appName, " cat=", category);
 
     // TODO check authentication method
 
     auto appSubPath = Filesystem::createAppPath(type, id, version);
-    TRACE_L1("appSubPath (normalized): %s", appSubPath.c_str());
+    INFO("appSubPath: ", appSubPath);
 
     auto tmpPath = Filesystem::getAppsTmpDir();
     auto tmpDirPath = tmpPath + appSubPath;
     Filesystem::ScopedDir scopedTmpDir{tmpDirPath};
 
-    Downloader downloader{url};
+    auto progressListener = [this] (int progress) {
+        setProgress(progress, OperationStage::DOWNLOADING);
+    };
+
+    Downloader downloader{url, progressListener};
 
     auto downloadSize = downloader.getContentLength();
     auto tmpFreeSpace = Filesystem::getFreeSpace(tmpDirPath);
 
-    TRACE_L1("download size: %ld tmp(%s) space: %ld", downloadSize, tmpPath.c_str(), tmpFreeSpace);
+    INFO("download size: ", downloadSize, " free tmp space: ", tmpFreeSpace);
 
     if (downloadSize > tmpFreeSpace) {
         std::string message = std::string{} + "not enough space on " + tmpPath + " (available: "
@@ -233,32 +245,36 @@ void Executor::doInstall(std::string type,
     downloader.get(tmpFile);
 
     const std::string appsPath = Filesystem::getAppsDir() + appSubPath;
-    TRACE_L1("creating %s ", appsPath.c_str());
+    INFO("creating ", appsPath);
     Filesystem::ScopedDir scopedAppDir{appsPath};
 
-    TRACE_L1("unpacking %s to %s", tmpFilePath.c_str(), appsPath.c_str());
+    setProgress(0, OperationStage::UNTARING);
+    INFO("unpacking ", tmpFilePath, "to ", appsPath);
     Archive::unpack(tmpFilePath, appsPath);
 
     auto appStoragePath = Filesystem::getAppsStorageDir() + appSubPath;
-    TRACE_L1("creating storage %s ", appStoragePath.c_str());
+    INFO("creating storage ", appStoragePath);
     Filesystem::ScopedDir scopedAppStorageDir{appStoragePath};
 
     // everything went fine, mark app directories to not be removed
     scopedAppDir.commit();
     scopedAppStorageDir.commit();
 
+    setProgress(0, OperationStage::UPDATING_DATABASE);
+
     // TODO add entry to database
+
+    setProgress(0, OperationStage::FINISHED);
 
     // TODO invoke maintenace and cleanup
     // TODO notify status
 
-    TRACE_L1("finished, notify status");
+    INFO("finished");
 }
 
 void Executor::doUninstall(std::string type, std::string id, std::string version, std::string uninstallType)
 {
-    TRACE_L1("type=%s idName=%s version=%s uninstallType=%s", type.c_str(), id.c_str(), version.c_str(),
-        uninstallType.c_str());
+    INFO("type=", type, " id=", id, " version=", version, " uninstallType=", uninstallType);
 
     // TODO remove from database
 
@@ -266,19 +282,50 @@ void Executor::doUninstall(std::string type, std::string id, std::string version
     auto appSubPath = Filesystem::createAppPath(type, id, version);
 
     auto appPath = Filesystem::getAppsDir() + appSubPath;
-    TRACE_L1("removing %s ", appPath.c_str());
+    INFO("removing ", appPath);
     Filesystem::removeDirectory(appPath);
 
     if (uninstallType == "full") {
         auto appStoragePath = Filesystem::getAppsStorageDir() + appSubPath;
-        TRACE_L1("removing storage directory %s ", appStoragePath.c_str());
+        INFO("removing storage directory ", appStoragePath);
         Filesystem::removeDirectory(appStoragePath);
     }
 
     // TODO invoke maintenace and cleanup
     // TODO notify status
 
-    TRACE_L1("finished, notify status");
+    INFO("finished");
+}
+
+void Executor::setProgress(int stagePercent, OperationStage stage)
+{
+    constexpr auto STAGES = enumToInt(OperationStage::COUNT);
+    const std::array<int, STAGES> stageBase = {{0, 90, 95, 100}};
+    const std::array<double, STAGES> stageFactor = {{90.0/100, 5.0/100, 5.0/100, 0}};
+
+    int stageIndex = enumToInt(stage);
+    int resultPercent = stageBase[stageIndex] + (static_cast<int>(stagePercent * stageFactor[stageIndex]));
+
+    INFO("overall: ", resultPercent, "% from stage: ", stage, " progress: ", stagePercent, "%", " ");
+
+    LockGuard lock{taskMutex};
+    currentTask.progress = resultPercent;
+}
+
+std::ostream& operator<<(std::ostream& out, const Executor::Task& task)
+{
+    return out << "task[" << task.handle << "]";
+}
+
+std::ostream& operator<<(std::ostream& out, Executor::OperationStage stage)
+{
+    const std::array<const char*, enumToInt(Executor::OperationStage::COUNT)> stages = {{
+            "DOWNLOADING",
+            "UNTARING",
+            "UPDATING_DATABASE",
+            "FINISHED"}};
+
+    return out << stages[enumToInt(stage)];
 }
 
 } // namespace LISA
