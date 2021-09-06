@@ -301,12 +301,12 @@ void Executor::setProgress(int stagePercent, OperationStage stage)
 {
     constexpr auto STAGES = enumToInt(OperationStage::COUNT);
     const std::array<int, STAGES> stageBase = {{0, 90, 95, 100}};
-    const std::array<double, STAGES> stageFactor = {{90/100, 5/100, 5/100, 0}};
+    const std::array<double, STAGES> stageFactor = {{90.0/100, 5.0/100, 5.0/100, 0}};
 
     int stageIndex = enumToInt(stage);
-    int resultPercent = stageBase[stageIndex] + ((static_cast<int>(stagePercent) * stageFactor[stageIndex]));
+    int resultPercent = stageBase[stageIndex] + (static_cast<int>(stagePercent * stageFactor[stageIndex]));
 
-    INFO("overall: ", resultPercent, " form stage: ", stage, " progress: ", stagePercent, "%", " ");
+    INFO("overall: ", resultPercent, "% from stage: ", stage, " progress: ", stagePercent, "%", " ");
 
     LockGuard lock{taskMutex};
     currentTask.progress = resultPercent;
