@@ -214,17 +214,28 @@ public:
         return executor.GetProgress(handle, progress);
     }
 
-    uint32_t Configure(const std::string& dbpath) override
+    void HandleDirectories()
+    {
+        LISA::Filesystem::removeAllDirectoriesExcept(LISA::Filesystem::getAppsDir(), LISA::Filesystem::LISA_EPOCH);
+        LISA::Filesystem::removeAllDirectoriesExcept(LISA::Filesystem::getAppsStorageDir(), LISA::Filesystem::LISA_EPOCH);
+        LISA::Filesystem::createDirectory(LISA::Filesystem::getAppsDir() + LISA::Filesystem::LISA_EPOCH);
+        LISA::Filesystem::createDirectory(LISA::Filesystem::getAppsStorageDir() + LISA::Filesystem::LISA_EPOCH);
+    }
+
+    void InitializeDataBase(const std::string& dbpath)
     {
         std::string path = dbpath + '/' + LISA::Filesystem::LISA_EPOCH;
-        try {
-            LISA::Filesystem::createDirectory(path);
-            ds = std::unique_ptr<LISA::SqlDataStorage>(new LISA::SqlDataStorage(path));
-            ds->Initialize();
-        } catch (LISA::Filesystem::FilesystemError& error) {
-            TRACE(Trace::Error, (_T("Unable to create database directory: %s"), error.what()));
-            return Core::ERROR_GENERAL;
-        }
+        LISA::Filesystem::createDirectory(path);
+        ds = std::unique_ptr<LISA::SqlDataStorage>(new LISA::SqlDataStorage(path));
+        ds->Initialize();
+    }
+
+    uint32_t Configure(const std::string& dbpath) override
+    {
+        HandleDirectories();
+        InitializeDataBase(dbpath);
+        // TODO invoke maintenace and cleanup
+        // TODO notify status
         return Core::ERROR_NONE;
     }
 

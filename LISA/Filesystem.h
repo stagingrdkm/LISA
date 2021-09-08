@@ -56,6 +56,7 @@ std::string createAppPath(Args... pathParts)
 bool directoryExists(const std::string& path);
 bool createDirectory(const std::string& path);
 void removeDirectory(const std::string& path);
+void removeAllDirectoriesExcept(const std::string& path, const std::string& except);
 
 /**
  * Helper class for temporary directories and rolling back changes.

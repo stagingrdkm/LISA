@@ -144,6 +144,24 @@ void removeDirectory(const std::string& path)
     }
 }
 
+void removeAllDirectoriesExcept(const std::string& path, const std::string& except)
+{
+    INFO("removing directories ", path, " except ", except);
+
+    try {
+        boost::filesystem::directory_iterator end_itr;
+        for(boost::filesystem::directory_iterator itr(path); itr != end_itr; ++itr)
+        {
+           if(itr->path().filename().compare(except))
+               removeDirectory(itr->path().string());
+        }
+    }
+    catch(boost::filesystem::filesystem_error& error) {
+        std::string message = std::string{} + "error " + error.what() + " removing directories " + path;
+        throw FilesystemError(message);
+    }
+}
+
 long getFreeSpace(const std::string& path)
 {
     long freeSpace{};
