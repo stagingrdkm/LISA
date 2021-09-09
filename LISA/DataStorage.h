@@ -26,7 +26,7 @@ namespace LISA {
 class DataStorage {
     public:
         virtual ~DataStorage() {}
-        virtual bool Initialize() = 0;
+        virtual void Initialize() = 0;
     };
 
 } // namespace LISA

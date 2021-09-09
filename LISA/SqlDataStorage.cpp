@@ -20,7 +20,7 @@
 
 #include <fstream>
 #include <string.h>
-#include <Module.h>
+#include "Debug.h"
 #include "SqlDataStorage.h"
 
 #ifndef SQLITE_FILE_HEADER
@@ -48,38 +48,38 @@ namespace LISA {
         sqlite = nullptr;
     }
 
-    bool SqlDataStorage::Initialize()
+    void SqlDataStorage::Initialize()
     {
         if(InitDB() == false)
         {
-            TRACE(Trace::Error, (_T("Initializing database failed!")));
-            return false;
+            ERROR("Initializing database failed!");
+            throw SqlDataStorageError("Initializing database failed!");
         }
-        return true;
     }
 
     bool SqlDataStorage::InitDB()
     {
-        TRACE(Trace::Information, (_T("Initializing database")));
+        INFO("Initializing database");
         Terminate();
         return OpenConnection() && CreateTables() && EnableForeignKeys();
     }
 
     bool SqlDataStorage::OpenConnection()
     {
-        TRACE(Trace::Information, (_T("Opening database connection: %s"), db_path.c_str()));
+        INFO("Opening database connection: ", db_path);
         bool rc = sqlite3_open(db_path.c_str(), &sqlite);
         if(rc)
         {
-            TRACE(Trace::Error, (_T("%d - %s"), rc, sqlite3_errmsg(sqlite)));
+            ERROR("Error opening connection: ", rc, " - ", sqlite3_errmsg(sqlite));
             return false;
         }
+        Validate();
         return true;
     }
 
     bool SqlDataStorage::CreateTables() const
     {
-        TRACE(Trace::Information, (_T("Creating LISA tables")));
+        INFO("Creating LISA tables");
         bool apps = ExecuteCommand("CREATE TABLE IF NOT EXISTS apps("
                                     "idx INTEGER PRIMARY KEY,"
                                     "type TEXT NOT NULL,"
@@ -106,28 +106,43 @@ namespace LISA {
 
     bool SqlDataStorage::EnableForeignKeys() const
     {
-        TRACE(Trace::Information, (_T("Enabling foreign keys")));
+        INFO("Enabling foreign keys");
         return ExecuteCommand("PRAGMA foreign_keys = ON;");
     }
 
-    bool SqlDataStorage::ExecuteCommand(const std::string& command) const
+    bool SqlDataStorage::ExecuteCommand(const std::string& command, SqlCallback callback, void* val) const
     {
         char* errmsg;
-        int rc = sqlite3_exec(sqlite, command.c_str(), 0, 0, &errmsg);
+        int rc = sqlite3_exec(sqlite, command.c_str(), callback, val, &errmsg);
         if(rc != SQLITE_OK || errmsg)
         {
             if (errmsg)
             {
-                TRACE(Trace::Error, (_T("%d : %s"), rc, errmsg));
+                ERROR("Error executin command: ", command, " - ", rc, " : ", errmsg);
                 sqlite3_free(errmsg);
             }
             else
             {
-                TRACE(Trace::Error, (_T("%d"), rc));
+                ERROR("Error executin command: ", command, " - ", rc);
             }
             return false;
         }
         return true;
+    }
+
+    void SqlDataStorage::Validate() const
+    {
+        bool ret = 0;
+        int rc = ExecuteCommand("PRAGMA integrity_check;", [](void* ret, int, char** resp, char**)->int
+        {
+            *static_cast<bool*>(ret) = strcmp(resp[0], "ok");
+            return 0;
+        }, &ret);
+        if(ret | !rc)
+        {
+            ExecuteCommand("DROP TABLE apps;");
+            ExecuteCommand("DROP TABLE installed_apps;");
+        }
     }
 
 } // namespace LISA

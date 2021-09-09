@@ -21,31 +21,38 @@
 
 #include <string>
 #include <sqlite3.h>
+#include <stdexcept>
 #include "DataStorage.h"
-#include "Module.h"
 
 namespace WPEFramework {
 namespace Plugin {
 namespace LISA {
 
+class SqlDataStorageError : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
 
 class SqlDataStorage: public DataStorage {
     public:
         explicit SqlDataStorage(const std::string& path): db_path(path + db_name) {}
         ~SqlDataStorage();
 
-        bool Initialize() override;
+        void Initialize() override;
     private:
         static sqlite3* sqlite;
         const std::string db_name = "/apps.db";
         const std::string db_path;
+        using SqlCallback = int (*)(void*, int, char**, char**);
 
         void Terminate();
         bool InitDB();
         bool OpenConnection();
         bool CreateTables() const;
         bool EnableForeignKeys() const;
-        bool ExecuteCommand(const std::string& command) const;
+        bool ExecuteCommand(const std::string& command, SqlCallback callback = nullptr, void* val = nullptr) const;
+        void Validate() const;
     };
 
 } // namespace LISA
