@@ -241,12 +241,52 @@ public:
 
     virtual uint32_t Register(ILISA::INotification* notification) override
     {
+        // Make sure a callback is not registered multiple times.
+        ASSERT(std::find(_notificationCallbacks.begin(), _notificationCallbacks.end(), notification) == _notificationCallbacks.end());
+
+        _notificationCallbacks.push_back(notification);
+        notification->AddRef();
+
+        TRACE_GLOBAL(Trace::Information, (_T("Register INotification:%p"), notification));
+
         return Core::ERROR_NONE;
     }
 
     virtual uint32_t Unregister(ILISA::INotification* notification) override
     {
+        auto index(std::find(_notificationCallbacks.begin(), _notificationCallbacks.end(), notification));
+
+        // Make sure you do not unregister something you did not register !!!
+        ASSERT(index != _notificationCallbacks.end());
+
+        if (index != _notificationCallbacks.end()) {
+            (*index)->Release();
+            _notificationCallbacks.erase(index);
+        }
         return Core::ERROR_NONE;
+    }
+
+private:
+    void onOperationStatus(
+            const std::string& handle,
+            const LISA::Executor::OperationStatus& status,
+            const std::string& details)
+    {
+        TRACE(Trace::Information, (_T("LISA onOperationStatus handle:%s"), handle.c_str()));
+        std::string statusStr;
+        switch (status)
+        {
+            case LISA::Executor::OperationStatus::SUCCESS:
+                statusStr = "Success";
+                break;
+            case LISA::Executor::OperationStatus::FAILED:
+                statusStr = "Failed";
+                break;
+        }
+
+        for(const auto index: _notificationCallbacks) {
+            index->operationStatus(handle, statusStr, details);
+        }
     }
 
 public:
@@ -606,8 +646,14 @@ public:
         return Core::ERROR_NONE;
     }
 private:
-    LISA::Executor executor{};
+    LISA::Executor executor{ 
+        [this](std::string handle, LISA::Executor::OperationStatus status, std::string details) 
+        {
+            this->onOperationStatus(handle, status, details);
+        }
+    };
     std::unique_ptr<LISA::DataStorage> ds;
+    std::list<Exchange::ILISA::INotification*> _notificationCallbacks{};
 };
 
 SERVICE_REGISTRATION(LISAImplementation, 1, 0);

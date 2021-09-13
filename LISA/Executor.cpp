@@ -186,16 +186,16 @@ void Executor::taskRunner(std::function<void()> task)
     INFO(task, " started ");
     try {
         task();
-        // TODO send status "Done"
         INFO(task, " done");
+        operationStatusCallback(currentTask.handle, OperationStatus::SUCCESS, std::string{});
     }
     catch(std::exception& exc){
         ERROR("exception running ", task, ": ", exc.what());
-        // TODO send status "Failed"
+        operationStatusCallback(currentTask.handle, OperationStatus::FAILED, std::string{exc.what()});
     }
     catch(...){
         ERROR("exception ...  running ", task);
-        // TODO send status "Failed"
+        operationStatusCallback(currentTask.handle, OperationStatus::FAILED, std::string{});
     }
 
 
@@ -267,7 +267,6 @@ void Executor::doInstall(std::string type,
     setProgress(0, OperationStage::FINISHED);
 
     // TODO invoke maintenace and cleanup
-    // TODO notify status
 
     INFO("finished");
 }
@@ -292,7 +291,6 @@ void Executor::doUninstall(std::string type, std::string id, std::string version
     }
 
     // TODO invoke maintenace and cleanup
-    // TODO notify status
 
     INFO("finished");
 }

@@ -28,17 +28,19 @@ namespace Plugin {
 
     SERVICE_REGISTRATION(LISA, LISA::API_VERSION_NUMBER_MAJOR, LISA::API_VERSION_NUMBER_MINOR);
 
-    const string LISA::Initialize(PluginHost::IShell* service) {
+    const string LISA::Initialize(PluginHost::IShell* service)
+    {
+        string message;
 
         TRACE(Trace::Information, (_T("LISA::Initialize")));
 
-        if (_lisa != nullptr) {
-            Unregister(*this);
-            _lisa->Release();
-            _lisa = nullptr;
-        }
+        ASSERT(_service == nullptr);
+        ASSERT(_lisa == nullptr);
 
-        string message;
+        // Register the Connection::Notification first. The Remote process might die before we get a
+        // chance to "register" the sink for these events !!! So do it ahead of instantiation.
+        _service = service;
+        _service->Register(&_notification);
 
         _lisa = service->Root<Exchange::ILISA>(_connectionId, 2000, _T("LISAImplementation"));
         if (_lisa != nullptr) {
@@ -46,12 +48,18 @@ namespace Plugin {
             config.FromString(service->ConfigLine());
             std::string path = (config.DbPath.IsSet() && !config.DbPath.Value().empty()) ? config.DbPath.Value() : service->PersistentPath();
             _lisa->Configure(path);
+
+            TRACE(Trace::Information, (_T("LISA::Initialize register notification")));
+            _lisa->Register(&_notification);
+
             TRACE(Trace::Information, (_T("LISA::Initialize register JSON-RPC API")));
             Register(*this, _lisa);
         }
 
         if (_lisa == nullptr) {
             TRACE(Trace::Error, (_T("LISA::Initialize - LISA could not be instantiated.")));
+            _service->Unregister(&_notification);
+            _service = nullptr;
             message = _T("LISA could not be instantiated.");
         }
 
@@ -61,14 +69,21 @@ namespace Plugin {
     void LISA::Deinitialize(PluginHost::IShell* service)
     {
         TRACE(Trace::Information, (_T("LISA::Deinitialize")));
+
+        ASSERT(_service == service);
         ASSERT(_lisa != nullptr);
 
         if (_lisa != nullptr) {
+            TRACE(Trace::Information, (_T("LISA::Deinitialize unregister JSON-RPC API")));
             Unregister(*this);
+            _service->Unregister(&_notification);
+            TRACE(Trace::Information, (_T("LISA::Deinitialize unregister notification")));
+            _lisa->Unregister(&_notification);
             _lisa->Release();
-            _lisa = nullptr;
         }
         _connectionId = 0;
+        _service = nullptr;
+        _lisa = nullptr;
     }
 
     string LISA::Information() const
@@ -76,6 +91,21 @@ namespace Plugin {
         return (string());
     }
 
+    void LISA::OperationStatus(const std::string& handle,
+                        const std::string& status,
+                        const std::string& details)
+    {
+        TRACE(Trace::Information, (_T("LISA::OperationStatus handle:%s status:%s details:%s"), handle.c_str(), status.c_str(), details.c_str()));
+        SendEventOperationStatus(*this, handle, status, details);
+    }
 
+    void LISA::Deactivated(RPC::IRemoteConnection* connection)
+    {
+        if (connection->Id() == _connectionId) {
+
+            ASSERT(_service != nullptr);
+            Core::IWorkerPool::Instance().Submit(PluginHost::IShell::Job::Create(_service, PluginHost::IShell::DEACTIVATED, PluginHost::IShell::FAILURE));
+        }
+    }
 }
 }

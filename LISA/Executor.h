@@ -30,6 +30,17 @@ namespace LISA {
 class Executor
 {
 public:
+    enum class OperationStatus {
+        SUCCESS,
+        FAILED
+    };
+
+    using OperationStatusCallback = std::function<void (std::string, OperationStatus, std::string)> ;
+
+    Executor(OperationStatusCallback callback) :
+        operationStatusCallback(callback)
+    {
+    }
 
     uint32_t Install(const std::string& type,
             const std::string& id,
@@ -87,7 +98,7 @@ private:
     Task currentTask{};
     std::mutex taskMutex{};
     std::thread worker{};
-
+    OperationStatusCallback operationStatusCallback;
 };
 
 } // namespace LISA
