@@ -302,9 +302,25 @@ namespace Plugin {
 
     void LISA::Unregister(PluginHost::JSONRPC& module)
     {
+        module.Unregister(_T("install"));
+        module.Unregister(_T("uninstall"));
+        module.Unregister(_T("download"));
+        module.Unregister(_T("getStorageDetails"));
+        module.Unregister(_T("setAuxMetadata"));
+        module.Unregister(_T("getMetadata"));
+        module.Unregister(_T("getProgress"));
         module.Unregister(_T("getList"));
     }
     
+    void LISA::SendEventOperationStatus(PluginHost::JSONRPC& module, const string& handle, const string& status, const string& details)
+    {
+        OperationStatusParamsData params;
+        params.Handle = handle;
+        params.Status = status;
+        params.Details = details;
+
+        module.Notify(_T("operationStatus"), params);
+    }
 
 } // namespace Plugin
 

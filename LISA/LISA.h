@@ -30,9 +30,54 @@ class LISA : public PluginHost::IPlugin, public PluginHost::JSONRPC {
         LISA(const LISA&) = delete;
         LISA& operator=(const LISA&) = delete;
 
+        class Notification : public RPC::IRemoteConnection::INotification,
+                                public Exchange::ILISA::INotification {
+            private:
+                Notification() = delete;
+                Notification(const Notification&) = delete;
+                Notification& operator=(const Notification&) = delete;
+
+            public:
+                explicit Notification(LISA* parent)
+                    : _parent(*parent)
+                {
+                    ASSERT(parent != nullptr);
+                }
+                virtual ~Notification() override
+                {
+                }
+
+            public:
+                void operationStatus(const std::string& handle,
+                        const std::string& status,
+                        const std::string& details) override
+                {
+                    _parent.OperationStatus(handle, status, details);
+                }
+
+                void Activated(RPC::IRemoteConnection* /* connection */) override
+                {
+                }
+                void Deactivated(RPC::IRemoteConnection* connection) override
+                {
+                    _parent.Deactivated(connection);
+                }
+
+                BEGIN_INTERFACE_MAP(Notification)
+                INTERFACE_ENTRY(Exchange::ILISA::INotification)
+                INTERFACE_ENTRY(RPC::IRemoteConnection::INotification)
+                END_INTERFACE_MAP
+
+            private:
+                LISA& _parent;
+            };
+
+
         LISA() 
             : _connectionId(0),
-            _lisa(nullptr)
+            _service(nullptr),
+            _lisa(nullptr),
+            _notification(this)
         {
         }
         
@@ -45,6 +90,10 @@ class LISA : public PluginHost::IPlugin, public PluginHost::JSONRPC {
         INTERFACE_AGGREGATE(Exchange::ILISA, _lisa)
         INTERFACE_ENTRY(PluginHost::IDispatcher)
         END_INTERFACE_MAP
+
+    private:
+        void Deactivated(RPC::IRemoteConnection* connection);
+        void OperationStatus(const string& handle, const string& status, const string& details);
 
     public:
         //   IPlugin methods
@@ -59,7 +108,9 @@ class LISA : public PluginHost::IPlugin, public PluginHost::JSONRPC {
 
     private:
         uint32_t _connectionId;
+        PluginHost::IShell* _service;
         Exchange::ILISA* _lisa;
+        Core::Sink<Notification> _notification;
 
         class Config : public Core::JSON::Container {
             private:
@@ -82,6 +133,7 @@ class LISA : public PluginHost::IPlugin, public PluginHost::JSONRPC {
     private:
         void Register(PluginHost::JSONRPC& module, Exchange::ILISA* destination);
         void Unregister(PluginHost::JSONRPC& module);
+        void SendEventOperationStatus(PluginHost::JSONRPC& module, const string& handle, const string& status, const string& details);
     };
 }
 }
