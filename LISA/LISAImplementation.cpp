@@ -25,6 +25,7 @@
 #include <interfaces/ILISA.h>
 #include <memory>
 #include <string>
+#include <mutex>
 
 namespace WPEFramework {
 namespace Plugin {
@@ -241,6 +242,7 @@ public:
 
     virtual uint32_t Register(ILISA::INotification* notification) override
     {
+        LockGuard lock(notificationMutex);
         // Make sure a callback is not registered multiple times.
         ASSERT(std::find(_notificationCallbacks.begin(), _notificationCallbacks.end(), notification) == _notificationCallbacks.end());
 
@@ -254,6 +256,7 @@ public:
 
     virtual uint32_t Unregister(ILISA::INotification* notification) override
     {
+        LockGuard lock(notificationMutex);
         auto index(std::find(_notificationCallbacks.begin(), _notificationCallbacks.end(), notification));
 
         // Make sure you do not unregister something you did not register !!!
@@ -284,6 +287,7 @@ private:
                 break;
         }
 
+        LockGuard lock(notificationMutex);
         for(const auto index: _notificationCallbacks) {
             index->operationStatus(handle, statusStr, details);
         }
@@ -652,8 +656,10 @@ private:
             this->onOperationStatus(handle, status, details);
         }
     };
+    using LockGuard = std::lock_guard<std::mutex>;
     std::unique_ptr<LISA::DataStorage> ds;
     std::list<Exchange::ILISA::INotification*> _notificationCallbacks{};
+    std::mutex notificationMutex{};
 };
 
 SERVICE_REGISTRATION(LISAImplementation, 1, 0);

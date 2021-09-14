@@ -184,24 +184,31 @@ void Executor::executeTask(std::function<void()> task)
 void Executor::taskRunner(std::function<void()> task)
 {
     INFO(task, " started ");
+
+    std::string handle;
+    OperationStatus status = OperationStatus::SUCCESS;
+    std::string details;
+
     try {
         task();
         INFO(task, " done");
-        operationStatusCallback(currentTask.handle, OperationStatus::SUCCESS, std::string{});
+        status = OperationStatus::SUCCESS;
     }
     catch(std::exception& exc){
         ERROR("exception running ", task, ": ", exc.what());
-        operationStatusCallback(currentTask.handle, OperationStatus::FAILED, std::string{exc.what()});
-    }
-    catch(...){
-        ERROR("exception ...  running ", task);
-        operationStatusCallback(currentTask.handle, OperationStatus::FAILED, std::string{});
+        status = OperationStatus::FAILED;
+        details = exc.what();
     }
 
+    {
+        LockGuard lock(taskMutex);
+        INFO("scheduled ", currentTask, " done");
+        // TODO Check if not cancelled and do not notify with operationStatus
+        handle = currentTask.handle;
+        currentTask = Task{};
+    }
 
-    LockGuard lock(taskMutex);
-    INFO("scheduled ", currentTask, " done");
-    currentTask = Task{};
+    operationStatusCallback(handle, status, details);
 }
 
 void Executor::doInstall(std::string type,
