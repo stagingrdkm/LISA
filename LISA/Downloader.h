@@ -29,6 +29,7 @@
 
 #include <curl/curl.h>
 
+#include <functional>
 #include <memory>
 #include <chrono>
 #include <stdexcept>

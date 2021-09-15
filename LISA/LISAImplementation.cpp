@@ -217,10 +217,10 @@ public:
 
     void HandleDirectories()
     {
-        LISA::Filesystem::removeAllDirectoriesExcept(LISA::Filesystem::getAppsDir(), LISA::Filesystem::LISA_EPOCH);
-        LISA::Filesystem::removeAllDirectoriesExcept(LISA::Filesystem::getAppsStorageDir(), LISA::Filesystem::LISA_EPOCH);
         LISA::Filesystem::createDirectory(LISA::Filesystem::getAppsDir() + LISA::Filesystem::LISA_EPOCH);
         LISA::Filesystem::createDirectory(LISA::Filesystem::getAppsStorageDir() + LISA::Filesystem::LISA_EPOCH);
+        LISA::Filesystem::removeAllDirectoriesExcept(LISA::Filesystem::getAppsDir(), LISA::Filesystem::LISA_EPOCH);
+        LISA::Filesystem::removeAllDirectoriesExcept(LISA::Filesystem::getAppsStorageDir(), LISA::Filesystem::LISA_EPOCH);
     }
 
     void InitializeDataBase(const std::string& dbpath)
