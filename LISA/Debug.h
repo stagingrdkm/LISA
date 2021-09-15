@@ -32,7 +32,6 @@
 
 namespace WPEFramework {
 namespace Plugin {
-namespace LISA {
 
 /** INTERNAL HELPERS *******************************************************************/
 
@@ -59,6 +58,24 @@ void lisaInternalMakeLogMessage(Args&&... args)
 
 /** INTERNAL HELPERS END ***************************************************************/
 
+// use TRACE_L1 - for easier development, no need to set TRACE after every restart
+//#define FORCE_TRACE_L1_DEBUGS
+#ifdef FORCE_TRACE_L1_DEBUGS
+#define INFO(...) do { \
+    LOG_INTERNAL(__VA_ARGS__) \
+    TRACE_L1("%s", str.c_str()); \
+    } while(0)
+
+#define INFO_THIS(...) do { \
+    LOG_INTERNAL(__VA_ARGS__) \
+    TRACE(Trace::Information, ("%s", str.c_str())); \
+    } while(0)
+
+#define ERROR(...) do { \
+    LOG_INTERNAL(__VA_ARGS__) \
+    TRACE_GLOBAL(Trace::Error, ("%s", str.c_str())); \
+    } while(0)
+#else // #ifdef FORCE_TRACE_L1_DEBUGS
 #define INFO(...) do { \
     LOG_INTERNAL(__VA_ARGS__) \
     TRACE_GLOBAL(Trace::Information, ("%s", str.c_str())); \
@@ -73,6 +90,7 @@ void lisaInternalMakeLogMessage(Args&&... args)
     LOG_INTERNAL(__VA_ARGS__) \
     TRACE_GLOBAL(Trace::Error, ("%s", str.c_str())); \
     } while(0)
+#endif // #ifdef FORCE_TRACE_L1_DEBUGS
 
 // operator<<'s for debugging purposes
 
@@ -94,7 +112,6 @@ constexpr typename std::underlying_type<T>::type enumToInt(T e)
     return static_cast<typename std::underlying_type<T>::type>(e);
 }
 
-} // namespace LISA
 } // namespace Plugin
 } // namespace WPEFramework
 
