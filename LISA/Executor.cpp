@@ -233,24 +233,22 @@ void Executor::doInstall(std::string type,
         setProgress(progress, OperationStage::DOWNLOADING);
     };
 
+    Downloader downloader{url, progressListener};
+
+    auto downloadSize = downloader.getContentLength();
+    auto tmpFreeSpace = Filesystem::getFreeSpace(tmpDirPath);
+
+    INFO("download size: ", downloadSize, " free tmp space: ", tmpFreeSpace);
+
+    if (downloadSize > tmpFreeSpace) {
+        std::string message = std::string{} + "not enough space on " + tmpPath + " (available: "
+                + std::to_string(tmpFreeSpace) +", required: " + std::to_string(downloadSize) + ")";
+        throw std::runtime_error(message);
+    }
+
     auto tmpFilePath = tmpDirPath + extractFilename(url);
 
-    {
-        Downloader downloader{url, progressListener};
-
-        auto downloadSize = downloader.getContentLength();
-        auto tmpFreeSpace = Filesystem::getFreeSpace(tmpDirPath);
-
-        INFO("download size: ", downloadSize, " free tmp space: ", tmpFreeSpace);
-
-        if (downloadSize > tmpFreeSpace) {
-            std::string message = std::string{} + "not enough space on " + tmpPath + " (available: "
-                + std::to_string(tmpFreeSpace) +", required: " + std::to_string(downloadSize) + ")";
-            throw std::runtime_error(message);
-        }
-        Filesystem::File tmpFile{tmpFilePath};
-        downloader.get(tmpFile);
-    }
+    downloader.get(tmpFilePath);
 
     const std::string appsPath = Filesystem::getAppsDir() + appSubPath;
     INFO("creating ", appsPath);

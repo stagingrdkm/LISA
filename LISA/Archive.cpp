@@ -86,9 +86,9 @@ public:
             std::string destPath{destination + archive_entry_pathname(entry)};
             archive_entry_set_pathname(entry, destPath.c_str());
 
-            const char *orig_hardlink = archive_entry_hardlink(entry);
-            if (orig_hardlink) {
-                std::string destPathHardLink{destination + '/' + orig_hardlink};
+            const char *origHardlink = archive_entry_hardlink(entry);
+            if (origHardlink) {
+                std::string destPathHardLink{destination + '/' + origHardlink};
                 archive_entry_set_hardlink(entry, destPathHardLink.c_str());
             }
 

@@ -62,7 +62,7 @@ public:
     Downloader(const std::string& uri, ProgressListener listner);
 
     long getContentLength();
-    void get(const Filesystem::File& destination);
+    void get(const std::string& destination);
 
 private:
     void performAction();
