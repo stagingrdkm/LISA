@@ -19,6 +19,9 @@
 
 #pragma once
 
+#include <vector>
+#include <string>
+
 namespace WPEFramework {
 namespace Plugin {
 namespace LISA {
@@ -27,6 +30,8 @@ class DataStorage {
     public:
         virtual ~DataStorage() {}
         virtual void Initialize() = 0;
+        virtual std::vector<std::string> GetAppsPaths(const std::string& type, const std::string& id, const std::string& version) = 0;
+        virtual std::vector<std::string> GetDataPaths(const std::string& type, const std::string& id) = 0;
     };
 
 } // namespace LISA

@@ -22,6 +22,8 @@
 #include <string>
 #include <sqlite3.h>
 #include <stdexcept>
+#include <vector>
+#include <string>
 #include "DataStorage.h"
 
 namespace WPEFramework {
@@ -40,6 +42,8 @@ class SqlDataStorage: public DataStorage {
         ~SqlDataStorage();
 
         void Initialize() override;
+        std::vector<std::string> GetAppsPaths(const std::string& type, const std::string& id, const std::string& version) override;
+        std::vector<std::string> GetDataPaths(const std::string& type, const std::string& id) override;
     private:
         static sqlite3* sqlite;
         const std::string db_name = "/apps.db";
@@ -53,6 +57,7 @@ class SqlDataStorage: public DataStorage {
         bool EnableForeignKeys() const;
         bool ExecuteCommand(const std::string& command, SqlCallback callback = nullptr, void* val = nullptr) const;
         void Validate() const;
+        std::vector<std::string> GetPaths(const std::string& query) const;
     };
 
 } // namespace LISA

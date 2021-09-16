@@ -20,12 +20,18 @@
 #include <functional>
 #include <string>
 #include <thread>
-
 #include <mutex>
+#include <memory>
+
+#include "DataStorage.h"
 
 namespace WPEFramework {
 namespace Plugin {
 namespace LISA {
+
+namespace Filesystem {
+struct StorageDetails;
+}
 
 class Executor
 {
@@ -58,6 +64,12 @@ public:
 
     uint32_t GetProgress(const std::string& handle, std::uint32_t& progress);
 
+    uint32_t GetStorageDetails(const std::string& type,
+            const std::string& id,
+            const std::string& version,
+            Filesystem::StorageDetails& details,
+            std::shared_ptr<LISA::DataStorage> storage);
+
 private:
 
     bool isWorkerBusy() const;
@@ -75,6 +87,10 @@ private:
                      std::string id,
                      std::string version,
                      std::string uninstallType);
+
+    bool getStorageParamsValid(const std::string& type,
+            const std::string& id,
+            const std::string& version) const;
 
     enum class OperationStage {
         DOWNLOADING,
