@@ -46,6 +46,7 @@ public:
     {
         assert(theArchive);
         archive_read_support_format_tar(theArchive);
+        archive_read_support_compression_gzip(theArchive);
 
         static constexpr int BLOCK_SIZE = 10240;
         if(archive_read_open_filename(theArchive, filePath.c_str(), BLOCK_SIZE) != ARCHIVE_OK) {
@@ -84,6 +85,12 @@ public:
 
             std::string destPath{destination + archive_entry_pathname(entry)};
             archive_entry_set_pathname(entry, destPath.c_str());
+
+            const char *origHardlink = archive_entry_hardlink(entry);
+            if (origHardlink) {
+                std::string destPathHardLink{destination + '/' + origHardlink};
+                archive_entry_set_hardlink(entry, destPathHardLink.c_str());
+            }
 
             auto extractStatus = archive_read_extract(theArchive, entry, flags);
             if (extractStatus == ARCHIVE_OK) {

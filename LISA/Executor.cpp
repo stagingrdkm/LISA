@@ -247,9 +247,8 @@ void Executor::doInstall(std::string type,
     }
 
     auto tmpFilePath = tmpDirPath + extractFilename(url);
-    Filesystem::File tmpFile{tmpFilePath};
 
-    downloader.get(tmpFile);
+    downloader.get(tmpFilePath);
 
     const std::string appsPath = Filesystem::getAppsDir() + appSubPath;
     INFO("creating ", appsPath);

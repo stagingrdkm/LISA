@@ -87,12 +87,13 @@ long Downloader::getContentLength()
     return static_cast<long>(curlContentLength);
 }
 
-void Downloader::get(const Filesystem::File& destination)
+void Downloader::get(const std::string& destination)
 {
+    Filesystem::File destinationFile{destination};
     INFO("downloading...");
 
     curl_easy_setopt(curl.get(), CURLOPT_NOBODY, 0);
-    curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, destination.getHandle());
+    curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, destinationFile.getHandle());
 
     performAction();
 }
