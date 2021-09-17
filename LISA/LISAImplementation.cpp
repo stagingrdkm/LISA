@@ -21,6 +21,7 @@
 #include "Module.h"
 #include "SqlDataStorage.h"
 #include "Filesystem.h"
+#include "Debug.h"
 
 #include <interfaces/ILISA.h>
 #include <memory>
@@ -82,22 +83,15 @@ public:
     class StorageImpl : public ILISA::IStorage
     {
     public:
-        enum StorageType
-        {
-            APPS,
-            PERSISTENT
-        };
-
         StorageImpl() = delete;
         StorageImpl(const StorageImpl&) = delete;
         StorageImpl& operator=(const StorageImpl&) = delete;
 
         StorageImpl(
-                const StorageImpl::StorageType storageType,
-                const std::string& type,
-                const std::string& id,
-                const std::string& version) : 
-                _storageType(storageType), _type(type), _id(id), _version(version)
+                const std::string& path,
+                const std::string& quota,
+                const std::string& usedKB) :
+                _path(path), _quota(quota), _usedKB(usedKB)
         {
         }
 
@@ -106,31 +100,23 @@ public:
         }
 
         uint32_t Path(string& path) const override {
-            switch (_storageType) {
-                case StorageType::APPS:
-                    path = "/sample/path/apps";
-                    break;
-                case StorageType::PERSISTENT:
-                    path = "/sample/path/persistent";
-                    break;
-            }
+            path = _path;
             return Core::ERROR_NONE;
         }
         
         uint32_t QuotaKB(string& quota) const override {
-            quota = "sample quota";
+            quota = _quota;
             return Core::ERROR_NONE;
         }
             
         uint32_t UsedKB(string& usedKB) const override {
-            usedKB = "sample usedKB";
+            usedKB = _usedKB;
             return Core::ERROR_NONE;
         }
     private:
-        StorageImpl::StorageType _storageType;
-        std::string _type;
-        std::string _id;
-        std::string _version;
+        std::string _path;
+        std::string _quota;
+        std::string _usedKB;
 
     public:
         BEGIN_INTERFACE_MAP(StorageImpl)
@@ -145,11 +131,9 @@ public:
         StoragePayloadImpl(const StoragePayloadImpl&) = delete;
         StoragePayloadImpl& operator=(const StoragePayloadImpl&) = delete;
 
-        StoragePayloadImpl(
-                const std::string& type,
-                const std::string& id,
-                const std::string& version) : 
-                _type(type), _id(id), _version(version)
+        explicit StoragePayloadImpl(const LISA::Filesystem::StorageDetails& details) :
+                _appPath(details.appPath), _appQuota(details.appQuota), _appUsedKB(details.appUsedKB),
+                _persistentPath(details.persistentPath), _persistentQuota(details.persistentQuota), _persistentUsedKB(details.persistentUsedKB)
         {
         }
 
@@ -159,19 +143,22 @@ public:
 
         uint32_t Apps(ILISA::IStorage*& storage) const override
         {
-            storage = (Core::Service<StorageImpl>::Create<ILISA::IStorage>(StorageImpl::StorageType::APPS, _type, _id, _version));
+            storage = (Core::Service<StorageImpl>::Create<ILISA::IStorage>(_appPath, _appQuota, _appUsedKB));
             return Core::ERROR_NONE;
         }
 
         uint32_t Persistent(ILISA::IStorage*& storage) const override
         {
-            storage = (Core::Service<StorageImpl>::Create<ILISA::IStorage>(StorageImpl::StorageType::PERSISTENT, _type, _id, _version));
+            storage = (Core::Service<StorageImpl>::Create<ILISA::IStorage>( _persistentPath, _persistentQuota, _persistentUsedKB));
             return Core::ERROR_NONE;
         }
     private:
-        std::string _type;
-        std::string _id;
-        std::string _version;
+        std::string _appPath;
+        std::string _appQuota;
+        std::string _appUsedKB;
+        std::string _persistentPath;
+        std::string _persistentQuota;
+        std::string _persistentUsedKB;
 
     public:
         BEGIN_INTERFACE_MAP(StoragePayloadImpl)
@@ -179,15 +166,6 @@ public:
         END_INTERFACE_MAP
     }; // StoragePayload
 
-    uint32_t GetStorageDetails(const std::string& type,
-            const std::string& id,
-            const std::string& version,
-            ILISA::IStoragePayload*& result) override
-    {
-        result = (Core::Service<StoragePayloadImpl>::Create<ILISA::IStoragePayload>(type, id, version));
-        return Core::ERROR_NONE;
-    }
- 
     uint32_t SetAuxMetadata(const std::string& type,
             const std::string& id,
             const std::string& version,
@@ -227,7 +205,7 @@ public:
     {
         std::string path = dbpath + '/' + LISA::Filesystem::LISA_EPOCH;
         LISA::Filesystem::createDirectory(path);
-        ds = std::unique_ptr<LISA::SqlDataStorage>(new LISA::SqlDataStorage(path));
+        ds = std::make_shared<LISA::SqlDataStorage>(path);
         ds->Initialize();
     }
 
@@ -649,6 +627,28 @@ public:
         result = appsPayload;
         return Core::ERROR_NONE;
     }
+
+    uint32_t GetStorageDetails(const std::string& type,
+            const std::string& id,
+            const std::string& version,
+            ILISA::IStoragePayload*& result) override
+    {
+        uint32_t ret = Core::ERROR_NONE;
+        LISA::Filesystem::StorageDetails details;
+        if(type.empty() && !appsStorageKBCache.empty() && !appsKBCache.empty()) {
+            INFO("Using cached values");
+            details.appPath = LISA::Filesystem::getAppsDir();
+            details.appUsedKB = appsKBCache;
+            details.persistentPath = LISA::Filesystem::getAppsStorageDir();
+            details.persistentUsedKB = appsStorageKBCache;
+        } else {
+            INFO("Calculating storage usage");
+            ret = executor.GetStorageDetails(type, id, version, details, ds);
+        }
+        result = Core::Service<StoragePayloadImpl>::Create<ILISA::IStoragePayload>(details);
+        return ret;
+    }
+
 private:
     LISA::Executor executor{ 
         [this](std::string handle, LISA::Executor::OperationStatus status, std::string details) 
@@ -657,9 +657,11 @@ private:
         }
     };
     using LockGuard = std::lock_guard<std::mutex>;
-    std::unique_ptr<LISA::DataStorage> ds;
     std::list<Exchange::ILISA::INotification*> _notificationCallbacks{};
     std::mutex notificationMutex{};
+    std::shared_ptr<LISA::DataStorage> ds;
+    std::string appsKBCache{};
+    std::string appsStorageKBCache{};
 };
 
 SERVICE_REGISTRATION(LISAImplementation, 1, 0);

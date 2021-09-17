@@ -33,6 +33,16 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+struct StorageDetails
+{
+    std::string appPath{};
+    std::string appQuota{};
+    std::string appUsedKB{};
+    std::string persistentPath{};
+    std::string persistentQuota{};
+    std::string persistentUsedKB{};
+};
+
 std::string getAppsTmpDir();
 std::string getAppsDir();
 std::string getAppsStorageDir();
@@ -80,6 +90,7 @@ private:
 };
 
 long getFreeSpace(const std::string& path);
+long getDirectorySpace(const std::string& path);
 
 } // namespace Filesystem
 } // namespace LISA

@@ -20,6 +20,7 @@
 
 #include <fstream>
 #include <string.h>
+#include <sstream>
 #include "Debug.h"
 #include "SqlDataStorage.h"
 
@@ -41,8 +42,7 @@ namespace LISA {
 
     void SqlDataStorage::Terminate()
     {
-        if(sqlite)
-        {
+        if(sqlite) {
             sqlite3_close(sqlite);
         }
         sqlite = nullptr;
@@ -50,8 +50,7 @@ namespace LISA {
 
     void SqlDataStorage::Initialize()
     {
-        if(InitDB() == false)
-        {
+        if(InitDB() == false) {
             ERROR("Initializing database failed!");
             throw SqlDataStorageError("Initializing database failed!");
         }
@@ -68,8 +67,7 @@ namespace LISA {
     {
         INFO("Opening database connection: ", db_path);
         bool rc = sqlite3_open(db_path.c_str(), &sqlite);
-        if(rc)
-        {
+        if(rc) {
             ERROR("Error opening connection: ", rc, " - ", sqlite3_errmsg(sqlite));
             return false;
         }
@@ -114,15 +112,11 @@ namespace LISA {
     {
         char* errmsg;
         int rc = sqlite3_exec(sqlite, command.c_str(), callback, val, &errmsg);
-        if(rc != SQLITE_OK || errmsg)
-        {
-            if (errmsg)
-            {
+        if(rc != SQLITE_OK || errmsg) {
+            if (errmsg) {
                 ERROR("Error executin command: ", command, " - ", rc, " : ", errmsg);
                 sqlite3_free(errmsg);
-            }
-            else
-            {
+            } else {
                 ERROR("Error executin command: ", command, " - ", rc);
             }
             return false;
@@ -138,12 +132,59 @@ namespace LISA {
             *static_cast<bool*>(ret) = strcmp(resp[0], "ok");
             return 0;
         }, &ret);
-        if(ret | !rc)
-        {
+        if(ret | !rc) {
             ExecuteCommand("DROP TABLE apps;");
             ExecuteCommand("DROP TABLE installed_apps;");
         }
     }
+
+    std::vector<std::string> SqlDataStorage::GetAppsPaths(const std::string& type, const std::string& id, const std::string& version)
+    {
+        std::stringstream query;
+        query << "SELECT app_path FROM installed_apps";
+        if(!type.empty()) {
+            query << " WHERE app_idx IN (SELECT idx FROM apps WHERE type == '" << type << "'";
+            if(!id.empty()) {
+                query << " AND app_id == '" << id << "')";
+                if(!version.empty()) {
+                    query << " AND version == '" << version << "'";
+                }
+            } else {
+                query << ")";
+            }
+        }
+        query << ";";
+        return GetPaths(query.str());
+    }
+
+    std::vector<std::string> SqlDataStorage::GetDataPaths(const std::string& type, const std::string& id)
+    {
+        std::stringstream query;
+        query << "SELECT data_path FROM apps";
+        if(!type.empty()) {
+            query << " WHERE type == '" << type << "'";
+            if(!id.empty()) {
+                query << " AND app_id == '" << id << "'";
+            }
+        }
+        query << ";";
+        return GetPaths(query.str());
+    }
+
+    std::vector<std::string> SqlDataStorage::GetPaths(const std::string& query) const
+    {
+        std::vector<std::string> paths;
+        ExecuteCommand(query.c_str(), [](void* paths, int columns, char** resp, char**)->int
+        {
+            for(auto i = 0; i < columns; ++i)
+            {
+                static_cast<std::vector<std::string>*>(paths)->push_back(resp[i]);
+            }
+            return 0;
+        }, &paths);
+        return paths;
+    }
+
 
 } // namespace LISA
 } // namespace Plugin

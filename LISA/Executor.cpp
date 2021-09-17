@@ -165,6 +165,54 @@ uint32_t Executor::GetProgress(const std::string& handle, std::uint32_t& progres
     return ERROR_NONE;
 }
 
+bool Executor::getStorageParamsValid(const std::string& type,
+        const std::string& id,
+        const std::string& version) const
+{
+    // In Stage 1 we support only none parameters or all of them
+    return ((!type.empty() && !id.empty() && !version.empty()) || (type.empty() && id.empty() && version.empty()));
+}
+
+uint32_t Executor::GetStorageDetails(const std::string& type,
+                           const std::string& id,
+                           const std::string& version,
+                           Filesystem::StorageDetails& details,
+                           std::shared_ptr<LISA::DataStorage> storage)
+{
+    namespace fs = Filesystem;
+    if(!getStorageParamsValid(type, id, version)) {
+        return ERROR_WRONG_PARAMS;
+    }
+
+    if(type.empty()) {
+        INFO("Calculating overall usage");
+        details.appPath = fs::getAppsDir();
+        details.appUsedKB = std::to_string(fs::getDirectorySpace(fs::getAppsDir()) + fs::getDirectorySpace(fs::getAppsTmpDir()));
+        details.persistentPath = fs::getAppsStorageDir();
+        details.persistentUsedKB = std::to_string(fs::getDirectorySpace(fs::getAppsStorageDir()));
+    } else {
+        INFO("Calculating usage for: type = ", type, " id = ", id, " version = ", version);
+        std::vector<std::string> appsPaths = storage->GetAppsPaths(type, id, version);
+        long appUsedKB{};
+        // In Stage 1 there will be only one entry here
+        for(const auto& i: appsPaths)
+        {
+            appUsedKB += fs::getDirectorySpace(i);
+            details.appPath = i;
+        }
+        std::vector<std::string> dataPaths = storage->GetDataPaths(type, id);
+        long persistentUsedKB{};
+        for(const auto& i: dataPaths)
+        {
+            persistentUsedKB += fs::getDirectorySpace(i);
+            details.persistentPath = i;
+        }
+        details.appUsedKB = std::to_string(appUsedKB);
+        details.persistentUsedKB = std::to_string(persistentUsedKB);
+    }
+    return ERROR_NONE;
+}
+
 bool Executor::isWorkerBusy() const
 {
     return ! currentTask.handle.empty();

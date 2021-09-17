@@ -152,8 +152,9 @@ void removeAllDirectoriesExcept(const std::string& path, const std::string& exce
         boost::filesystem::directory_iterator end_itr;
         for(boost::filesystem::directory_iterator itr(path); itr != end_itr; ++itr)
         {
-           if(itr->path().filename().compare(except))
+           if(itr->path().filename().compare(except)) {
                removeDirectory(itr->path().string());
+           }
         }
     }
     catch(boost::filesystem::filesystem_error& error) {
@@ -176,6 +177,27 @@ long getFreeSpace(const std::string& path)
     }
 
     return freeSpace;
+}
+
+long getDirectorySpace(const std::string& path)
+{
+    long space{};
+    namespace bf = boost::filesystem;
+    try {
+        if(directoryExists(path)) {
+            for(bf::recursive_directory_iterator it(path); it != bf::recursive_directory_iterator(); ++it)
+            {
+                if(!bf::is_directory(*it) && !bf::is_symlink(*it)) {
+                    space += bf::file_size(*it);
+                }
+            }
+        }
+    }
+    catch(bf::filesystem_error& error) {
+        std::string message = std::string{} + "error " + error.what() + " reading directory space on " + path;
+        throw FilesystemError(message);
+    }
+    return space;
 }
 
 } // namespace Filesystem
