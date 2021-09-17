@@ -19,45 +19,91 @@
 
 #pragma once
 
+#include "DataStorage.h"
+
 #include <string>
 #include <sqlite3.h>
 #include <stdexcept>
-#include <vector>
 #include <string>
-#include "DataStorage.h"
+#include <vector>
 
 namespace WPEFramework {
 namespace Plugin {
 namespace LISA {
 
-class SqlDataStorageError : public std::runtime_error
-{
-public:
-    using std::runtime_error::runtime_error;
-};
+using SqlDataStorageError = DataStorageError;
 
-class SqlDataStorage: public DataStorage {
+class SqlDataStorage: public DataStorage
+{
     public:
         explicit SqlDataStorage(const std::string& path): db_path(path + db_name) {}
+        SqlDataStorage(const SqlDataStorage&) = delete;
+        SqlDataStorage& operator=(const SqlDataStorage&) = delete;
         ~SqlDataStorage();
 
         void Initialize() override;
         std::vector<std::string> GetAppsPaths(const std::string& type, const std::string& id, const std::string& version) override;
         std::vector<std::string> GetDataPaths(const std::string& type, const std::string& id) override;
+
+        void AddInstalledApp(const std::string& type,
+                             const std::string& id,
+                             const std::string& version,
+                             const std::string& url,
+                             const std::string& appName,
+                             const std::string& category,
+                             const std::string& appPath) override;
+
+        bool IsAppInstalled(const std::string& type,
+                            const std::string& id,
+                            const std::string& version) override;
+
+        void RemoveInstalledApp(const std::string& type,
+                                const std::string& id,
+                                const std::string& version) override;
+
+        void RemoveAppData(const std::string& type,
+                           const std::string& id) override;
+
     private:
         static sqlite3* sqlite;
         const std::string db_name = "/apps.db";
         const std::string db_path;
         using SqlCallback = int (*)(void*, int, char**, char**);
+        constexpr static int INVALID_INDEX = -1;
 
         void Terminate();
-        bool InitDB();
-        bool OpenConnection();
-        bool CreateTables() const;
-        bool EnableForeignKeys() const;
-        bool ExecuteCommand(const std::string& command, SqlCallback callback = nullptr, void* val = nullptr) const;
+        void InitDB();
+        void OpenConnection();
+        void CreateTables() const;
+        void EnableForeignKeys() const;
+        void ExecuteCommand(const std::string& command, SqlCallback callback = nullptr, void* val = nullptr) const;
         void Validate() const;
         std::vector<std::string> GetPaths(const std::string& query) const;
+
+        void InsertIntoApps(const std::string& type,
+                            const std::string& id,
+                            const std::string& appPath,
+                            const std::string& created);
+
+        int GetAppIdx(const std::string& type,
+                      const std::string& id,
+                      const std::string& version);
+
+        void InsertIntoInstalledApps(int idx,
+                                     const std::string& version,
+                                     const std::string& name,
+                                     const std::string& category,
+                                     const std::string& url,
+                                     const std::string& appPath,
+                                     const std::string& timeCreated);
+
+        void DeleteFromInstalledApps(const std::string& type,
+                                     const std::string& id,
+                                     const std::string& version);
+
+        void DeleteFromApps(const std::string& type,
+                            const std::string& id);
+
     };
 
 } // namespace LISA

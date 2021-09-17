@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include <memory>
 #include <ostream>
 #include <type_traits>
 
@@ -114,5 +115,18 @@ constexpr typename std::underlying_type<T>::type enumToInt(T e)
 
 } // namespace Plugin
 } // namespace WPEFramework
+
+#if (__cplusplus == 201103)
+
+namespace std
+{
+template<typename T, typename... Args>
+std::unique_ptr<T> make_unique(Args&&... args)
+{
+    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+}
+} // namespace std
+
+#endif // (__cplusplus == 201103)
 
 
