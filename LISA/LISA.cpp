@@ -17,8 +17,10 @@
  * limitations under the License.
  */
 
-#include <string>
+#include "Debug.h"
 #include "LISA.h"
+
+#include <string>
 
 const short WPEFramework::Plugin::LISA::API_VERSION_NUMBER_MAJOR = 1;
 const short WPEFramework::Plugin::LISA::API_VERSION_NUMBER_MINOR = 0;
@@ -30,9 +32,7 @@ namespace Plugin {
 
     const string LISA::Initialize(PluginHost::IShell* service)
     {
-        string message;
-
-        TRACE(Trace::Information, (_T("LISA::Initialize")));
+        TRACE_L1("");
 
         ASSERT(_service == nullptr);
         ASSERT(_lisa == nullptr);
@@ -42,6 +42,7 @@ namespace Plugin {
         _service = service;
         _service->Register(&_notification);
 
+        string message;
         _lisa = service->Root<Exchange::ILISA>(_connectionId, 2000, _T("LISAImplementation"));
         if (_lisa != nullptr) {
             Config config;
@@ -49,15 +50,15 @@ namespace Plugin {
             std::string path = (config.DbPath.IsSet() && !config.DbPath.Value().empty()) ? config.DbPath.Value() : service->PersistentPath();
             _lisa->Configure(path);
 
-            TRACE(Trace::Information, (_T("LISA::Initialize register notification")));
+            TRACE_L1("register notification");
             _lisa->Register(&_notification);
 
-            TRACE(Trace::Information, (_T("LISA::Initialize register JSON-RPC API")));
+            TRACE_L1("register JSON-RPC API");
             Register(*this, _lisa);
         }
 
         if (_lisa == nullptr) {
-            TRACE(Trace::Error, (_T("LISA::Initialize - LISA could not be instantiated.")));
+            TRACE_L1("LISA could not be instantiated.");
             _service->Unregister(&_notification);
             _service = nullptr;
             message = _T("LISA could not be instantiated.");
@@ -68,22 +69,24 @@ namespace Plugin {
 
     void LISA::Deinitialize(PluginHost::IShell* service)
     {
-        TRACE(Trace::Information, (_T("LISA::Deinitialize")));
+        TRACE_L1("");
 
         ASSERT(_service == service);
         ASSERT(_lisa != nullptr);
 
         if (_lisa != nullptr) {
-            TRACE(Trace::Information, (_T("LISA::Deinitialize unregister JSON-RPC API")));
+            TRACE_L1("unregister JSON-RPC API");
             Unregister(*this);
             _service->Unregister(&_notification);
-            TRACE(Trace::Information, (_T("LISA::Deinitialize unregister notification")));
+            TRACE_L1("unregister notification");
             _lisa->Unregister(&_notification);
             _lisa->Release();
         }
         _connectionId = 0;
         _service = nullptr;
         _lisa = nullptr;
+
+        TRACE_L1("done");
     }
 
     string LISA::Information() const
@@ -95,7 +98,7 @@ namespace Plugin {
                         const std::string& status,
                         const std::string& details)
     {
-        TRACE(Trace::Information, (_T("LISA::OperationStatus handle:%s status:%s details:%s"), handle.c_str(), status.c_str(), details.c_str()));
+        INFO("handle: ", handle, " status: ", status, " details: ", details);
         SendEventOperationStatus(*this, handle, status, details);
     }
 

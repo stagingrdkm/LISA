@@ -17,6 +17,7 @@
  * limitations under the License.
  */
 
+#include "Debug.h"
 #include "Executor.h"
 #include "Module.h"
 #include "SqlDataStorage.h"
@@ -227,7 +228,7 @@ public:
         _notificationCallbacks.push_back(notification);
         notification->AddRef();
 
-        TRACE_GLOBAL(Trace::Information, (_T("Register INotification:%p"), notification));
+        INFO("Register INotification: ", notification);
 
         return Core::ERROR_NONE;
     }
@@ -253,7 +254,7 @@ private:
             const LISA::Executor::OperationStatus& status,
             const std::string& details)
     {
-        TRACE(Trace::Information, (_T("LISA onOperationStatus handle:%s"), handle.c_str()));
+        INFO("LISA onOperationStatus handle:", handle, " details: ", details);
         std::string statusStr;
         switch (status)
         {
@@ -594,7 +595,7 @@ public:
         const std::string& category,
         IAppsPayload*& result) const override
     {
-        TRACE(Trace::Information, (_T("LISA GetList")));
+        INFO("");
     
         // Create versions of the apps
         std::list<AppVersionImpl*> app1_versions;
@@ -620,7 +621,7 @@ public:
         apps.push_back(app1);
         apps.push_back(app2);
 
-        TRACE(Trace::Information, (_T("LISA GetList apps:%d"), apps.size()));
+        INFO("apps: ", apps.size());
         
         // Create apps payload which will be returned as the result
         ILISA::IAppsPayload* appsPayload = Core::Service<AppsPayloadImpl>::Create<ILISA::IAppsPayload>(apps);

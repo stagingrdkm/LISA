@@ -16,7 +16,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+#include "Debug.h"
 #include "LISA.h"
 
 namespace WPEFramework {
@@ -33,7 +33,7 @@ namespace Plugin {
             [destination, this](const InstallParamsData& params, Core::JSON::String& response) -> uint32_t 
             {
                 uint32_t errorCode = Core::ERROR_NONE;
-                TRACE(Trace::Information, (_T("LISAJsonRpc Install")));
+                INFO("LISAJsonRpc Install");
 
                 std::string result;
                 errorCode = destination->Install(
@@ -45,7 +45,7 @@ namespace Plugin {
                     params.Category.Value(), result);
                 response = result;
 
-                TRACE(Trace::Information, (_T("LISAJsonRpc Install finished with code:%d"), errorCode));
+                INFO("LISAJsonRpc Install finished with code: ", errorCode);
                 return errorCode;
             });
 
@@ -53,7 +53,7 @@ namespace Plugin {
             [destination, this](const UninstallParamsData& params, Core::JSON::String& response) -> uint32_t 
             {
                 uint32_t errorCode = Core::ERROR_NONE;
-                TRACE(Trace::Information, (_T("LISAJsonRpc Uninstall")));
+                INFO("LISAJsonRpc Uninstall");
 
                 std::string result;
                 errorCode = destination->Uninstall(
@@ -63,7 +63,7 @@ namespace Plugin {
                     params.UninstallType.Value(), result);
                 response = result;
 
-                TRACE(Trace::Information, (_T("LISAJsonRpc Uninstall finished with code:%d"), errorCode));
+                INFO("LISAJsonRpc Uninstall finished with code: ", errorCode);
                 return errorCode;
             });
 
@@ -71,7 +71,7 @@ namespace Plugin {
             [destination, this](const DownloadParamsData& params, Core::JSON::String& response) -> uint32_t 
             {
                 uint32_t errorCode = Core::ERROR_NONE;
-                TRACE(Trace::Information, (_T("LISAJsonRpc Download")));
+                INFO("LISAJsonRpc Download");
 
                 std::string result;
                 errorCode = destination->Download(
@@ -82,7 +82,7 @@ namespace Plugin {
                     params.ResUrl.Value(), result);
                 response = result;
 
-                TRACE(Trace::Information, (_T("LISAJsonRpc Download finished with code:%d"), errorCode));
+                INFO("LISAJsonRpc Download finished with code: ", errorCode);
                 return errorCode;
             });
 
@@ -90,7 +90,7 @@ namespace Plugin {
             [destination, this](const ResetParamsData& params) -> uint32_t 
             {
                 uint32_t errorCode = Core::ERROR_NONE;
-                TRACE(Trace::Information, (_T("LISAJsonRpc Reset")));
+                INFO("LISAJsonRpc Reset");
 
                 errorCode = destination->Reset(
                     params.Type.Value(),
@@ -98,7 +98,7 @@ namespace Plugin {
                     params.Version.Value(), 
                     params.ResetType.Value());
 
-                TRACE(Trace::Information, (_T("LISAJsonRpc Reset finished with code:%d"), errorCode));
+                INFO("LISAJsonRpc Reset finished with code: ", errorCode);
                 return errorCode;
             });
 
@@ -110,7 +110,7 @@ namespace Plugin {
                 Exchange::ILISA::IStorage* iStorage = nullptr;
                 std::string val;
 
-                TRACE(Trace::Information, (_T("LISAJsonRpc GetStorageDetails")));
+                INFO("LISAJsonRpc GetStorageDetails");
 
                 errorCode = destination->GetStorageDetails(
                     params.Type.Value(),
@@ -118,13 +118,13 @@ namespace Plugin {
                     params.Version.Value(), result);
 
                 if (errorCode != Core::ERROR_NONE) {
-                    TRACE(Trace::Error, (_T("LISAJsonRpc GetStorageDetails() result:%d"), errorCode));
+                    ERROR("LISAJsonRpc GetStorageDetails() result: ", errorCode);
                     return errorCode;
                 }
                 
                 errorCode = result->Apps(iStorage);
                 if (errorCode != Core::ERROR_NONE) {
-                    TRACE(Trace::Error, (_T("LISAJsonRpc Apps() result:%d"), errorCode));
+                    ERROR("LISAJsonRpc Apps() result: ", errorCode);
                     return errorCode;
                 }
 
@@ -137,7 +137,7 @@ namespace Plugin {
                   
                 errorCode = result->Persistent(iStorage);
                 if (errorCode != Core::ERROR_NONE) {
-                    TRACE(Trace::Error, (_T("LISAJsonRpc Persistent() result:%d"), errorCode));
+                    ERROR("LISAJsonRpc Persistent() result: ", errorCode);
                     return errorCode;
                 }
 
@@ -148,7 +148,7 @@ namespace Plugin {
                 iStorage->UsedKB(val);
                 response.Persistent.UsedKB = Core::ToString(val);
                     
-                TRACE(Trace::Information, (_T("LISAJsonRpc GetStorageDetails finished with code:%d"), errorCode));
+                INFO("LISAJsonRpc GetStorageDetails finished with code: ", errorCode);
                 return errorCode;
             });
 
@@ -156,7 +156,7 @@ namespace Plugin {
             [destination, this](const SetAuxMetadataParamsData& params) -> uint32_t 
             {
                 uint32_t errorCode = Core::ERROR_NONE;
-                TRACE(Trace::Information, (_T("LISAJsonRpc SetAuxMetadata")));
+                INFO("LISAJsonRpc SetAuxMetadata");
 
                 errorCode = destination->SetAuxMetadata(
                     params.Type.Value(),
@@ -164,7 +164,7 @@ namespace Plugin {
                     params.Version.Value(), 
                     params.AuxMetadata.Value());
 
-                TRACE(Trace::Information, (_T("LISAJsonRpc SetAuxMetadata finished with code:%d"), errorCode));
+                INFO("LISAJsonRpc SetAuxMetadata finished with code: ", errorCode);
                 return errorCode;
             });
 
@@ -177,7 +177,7 @@ namespace Plugin {
             [destination, this](const GetStorageDetailsParamsInfo& params, Core::JSON::String& response) -> uint32_t 
             {
                 uint32_t errorCode = Core::ERROR_NONE;
-                TRACE(Trace::Information, (_T("LISAJsonRpc GetMetadata")));
+                INFO("LISAJsonRpc GetMetadata");
 
                 std::string result;
                 errorCode = destination->GetMetadata(
@@ -186,7 +186,7 @@ namespace Plugin {
                     params.Version.Value(), result);
                 response = result;
 
-                TRACE(Trace::Information, (_T("LISAJsonRpc GetMetadata finished with code:%d"), errorCode));
+                INFO("LISAJsonRpc GetMetadata finished with code: ", errorCode);
                 return errorCode;
             });
 
@@ -194,12 +194,12 @@ namespace Plugin {
             [destination, this](const CancelParamsInfo& params) -> uint32_t 
             {
                 uint32_t errorCode = Core::ERROR_NONE;
-                TRACE(Trace::Information, (_T("LISAJsonRpc Cancel")));
+                INFO("LISAJsonRpc Cancel");
 
                 errorCode = destination->Cancel(
                     params.Handle.Value());
 
-                TRACE(Trace::Information, (_T("LISAJsonRpc Cancel finished with code:%d"), errorCode));
+                INFO("LISAJsonRpc Cancel finished with code: ", errorCode);
                 return errorCode;
             });
 
@@ -210,14 +210,14 @@ namespace Plugin {
             [destination, this](const CancelParamsInfo& params, Core::JSON::DecUInt64& response) -> uint32_t 
             {
                 uint32_t errorCode = Core::ERROR_NONE;
-                TRACE(Trace::Information, (_T("LISAJsonRpc GetProgress")));
+                INFO("LISAJsonRpc GetProgress");
 
                 uint32_t result;
                 errorCode = destination->GetProgress(
                     params.Handle.Value(), result);
                 response = result;
 
-                TRACE(Trace::Information, (_T("LISAJsonRpc GetProgress finished with code:%d"), errorCode));
+                INFO("LISAJsonRpc GetProgress finished with code: ", errorCode);
                 return errorCode;
             });
 
@@ -233,7 +233,7 @@ namespace Plugin {
                 bool hasNext = false;
                 std::string val;
 
-                TRACE(Trace::Information, (_T("LISAJsonRpc GetList")));
+                INFO("LISAJsonRpc GetList");
 
                 errorCode = destination->GetList(
                     params.Type.Value(),
@@ -243,13 +243,13 @@ namespace Plugin {
                     params.Category.Value(), result);
 
                 if (errorCode != Core::ERROR_NONE) {
-                    TRACE(Trace::Error, (_T("LISAJsonRpc GetList() result:%d"), errorCode));
+                    ERROR("LISAJsonRpc GetList() result: ", errorCode);
                     return errorCode;
                 }
                 
                 errorCode = result->Apps(apps);
                 if (errorCode != Core::ERROR_NONE) {
-                    TRACE(Trace::Error, (_T("LISAJsonRpc Apps() result:%d"), errorCode));
+                    ERROR("LISAJsonRpc Apps() result: ", errorCode);
                     return errorCode;
                 }
                 
@@ -258,20 +258,20 @@ namespace Plugin {
                 {
                     errorCode = apps->Current(iApp);
                     if (errorCode != Core::ERROR_NONE) {
-                        TRACE(Trace::Error, (_T("LISAJsonRpc Current() result:%d"), errorCode));
+                        ERROR("LISAJsonRpc Current() result: ", errorCode);
                         return errorCode;
                     }
                     
                     AppslistpayloadData::AppData app;
                     iApp->Id(val);
                     app.Id = Core::ToString(val);
-                    TRACE(Trace::Information, (_T("LISAJsonRpc GetList app:%s"), val.c_str()));
+                    INFO("LISAJsonRpc GetList app: ", val);
                     iApp->Type(val);
                     app.Type = Core::ToString(val);
                     
                     errorCode = iApp->Installed(versions);
                     if (errorCode != Core::ERROR_NONE) {
-                       TRACE(Trace::Error, (_T("LISAJsonRpc Installed() result:%d"), errorCode));
+                       ERROR("LISAJsonRpc Installed() result: ", errorCode);
                        return errorCode;
                     }
                     
@@ -280,7 +280,7 @@ namespace Plugin {
                     {
                         errorCode = versions->Current(iVersion);
                         if (errorCode != Core::ERROR_NONE) {
-                            TRACE(Trace::Error, (_T("LISAJsonRpc Current() result:%d"), errorCode));
+                            ERROR("LISAJsonRpc Current() result: ", errorCode);
                             return errorCode;
                         }
 
@@ -295,7 +295,7 @@ namespace Plugin {
                     }
                     response.Apps.Add(app);
                 }
-                TRACE(Trace::Information, (_T("LISAJsonRpc GetList finished with code:%d"), errorCode));
+                INFO("LISAJsonRpc GetList finished with code: ", errorCode);
                 return errorCode;
             });
     }
