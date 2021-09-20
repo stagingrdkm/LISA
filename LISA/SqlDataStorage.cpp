@@ -300,7 +300,7 @@ namespace { // anonymous
                                                *(static_cast<int*>(appIdx)) = std::stoi(columnsTxt[0]);
                                            }
                                            catch(...) {
-                                               // skip silently
+                                               ERROR("error while converting index");
                                            }
                                            return 0;
                                        }, reinterpret_cast<void*>(&appIdx));
