@@ -19,13 +19,9 @@
 
 #include "Debug.h"
 #include "Executor.h"
-#include "Module.h"
-#include "SqlDataStorage.h"
 #include "Filesystem.h"
-#include "Debug.h"
 
 #include <interfaces/ILISA.h>
-#include <memory>
 #include <string>
 #include <mutex>
 
@@ -194,29 +190,9 @@ public:
         return executor.GetProgress(handle, progress);
     }
 
-    void HandleDirectories()
-    {
-        LISA::Filesystem::createDirectory(LISA::Filesystem::getAppsDir() + LISA::Filesystem::LISA_EPOCH);
-        LISA::Filesystem::createDirectory(LISA::Filesystem::getAppsStorageDir() + LISA::Filesystem::LISA_EPOCH);
-        LISA::Filesystem::removeAllDirectoriesExcept(LISA::Filesystem::getAppsDir(), LISA::Filesystem::LISA_EPOCH);
-        LISA::Filesystem::removeAllDirectoriesExcept(LISA::Filesystem::getAppsStorageDir(), LISA::Filesystem::LISA_EPOCH);
-    }
-
-    void InitializeDataBase(const std::string& dbpath)
-    {
-        std::string path = dbpath + '/' + LISA::Filesystem::LISA_EPOCH;
-        LISA::Filesystem::createDirectory(path);
-        ds = std::make_shared<LISA::SqlDataStorage>(path);
-        ds->Initialize();
-    }
-
     uint32_t Configure(const std::string& dbpath) override
     {
-        HandleDirectories();
-        InitializeDataBase(dbpath);
-        // TODO invoke maintenace and cleanup
-        // TODO notify status
-        return Core::ERROR_NONE;
+        return executor.Configure(dbpath);
     }
 
     virtual uint32_t Register(ILISA::INotification* notification) override
@@ -254,7 +230,7 @@ private:
             const LISA::Executor::OperationStatus& status,
             const std::string& details)
     {
-        INFO("LISA onOperationStatus handle:", handle, " details: ", details);
+        INFO("LISA onOperationStatus handle:", handle, "status: ", status, " details: ", details);
         std::string statusStr;
         switch (status)
         {
