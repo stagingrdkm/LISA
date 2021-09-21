@@ -23,6 +23,7 @@
 #include "Debug.h"
 #include "Downloader.h"
 #include "Filesystem.h"
+#include "SqlDataStorage.h"
 
 #include <array>
 #include <cassert>
@@ -41,31 +42,6 @@ std::string extractFilename(const std::string& uri)
     return uri.substr(found+1);
 }
 
-bool isAppInstalled(const std::string& type,
-                    const std::string& id,
-                    const std::string& version)
-{
-    // TODO check database
-    // TODO temporary check by looking for app dir
-
-    // TODO does other app version count?
-    auto appSubPath = Filesystem::createAppPath(type, id, version);
-
-    const std::string appDir = Filesystem::getAppsDir() + appSubPath;
-
-    auto result{false};
-    try {
-        result = Filesystem::directoryExists(appDir);
-        INFO("directory ", appDir, " ", (result ? "" : "not"), " found");
-    }
-    catch(std::exception& exc) {
-        ERROR(exc.what());
-    }
-
-    INFO("assuming app ", (result ? "" : "not "), "installed");
-    return result;
-}
-
 std::string generateHandle()
 {
     return std::to_string(std::rand());
@@ -75,10 +51,26 @@ std::string generateHandle()
 
 enum ReturnCodes {
     ERROR_NONE = 0, //Core::ERROR_NONE,
+    ERROR_GENERAL = 1,
     ERROR_WRONG_PARAMS = 1001,
     ERROR_TOO_MANY_REQUESTS = 1002,
     ERROR_ALREADY_INSTALLED = 1003,
 };
+
+uint32_t Executor::Configure(const std::string& dbPath)
+{
+    auto result{ERROR_GENERAL};
+    try {
+        handleDirectories();
+        initializeDataBase(dbPath);
+        result = ERROR_NONE;
+        INFO("configuration done");
+    } catch (std::exception& error) {
+        ERROR("Unable to configure executor: ", error.what());
+        return Core::ERROR_GENERAL;
+    }
+    return result;
+}
 
 uint32_t Executor::Install(const std::string& type,
                            const std::string& id,
@@ -213,6 +205,24 @@ uint32_t Executor::GetStorageDetails(const std::string& type,
     return ERROR_NONE;
 }
 
+void Executor::handleDirectories()
+{
+    Filesystem::createDirectory(Filesystem::getAppsDir() + Filesystem::LISA_EPOCH);
+    Filesystem::createDirectory(Filesystem::getAppsStorageDir() + Filesystem::LISA_EPOCH);
+    Filesystem::removeAllDirectoriesExcept(Filesystem::getAppsDir(), Filesystem::LISA_EPOCH);
+    Filesystem::removeAllDirectoriesExcept(Filesystem::getAppsStorageDir(), Filesystem::LISA_EPOCH);
+}
+
+void Executor::initializeDataBase(const std::string& dbPath)
+{
+    std::string path = dbPath + '/' + Filesystem::LISA_EPOCH;
+    Filesystem::ScopedDir dbDir(path);
+    dataBase = std::make_unique<LISA::SqlDataStorage>(path);
+    dataBase->Initialize();
+    dbDir.commit();
+    INFO("Database created");
+}
+
 bool Executor::isWorkerBusy() const
 {
     return ! currentTask.handle.empty();
@@ -257,6 +267,20 @@ void Executor::taskRunner(std::function<void()> task)
     }
 
     operationStatusCallback(handle, status, details);
+}
+
+bool Executor::isAppInstalled(const std::string& type,
+                              const std::string& id,
+                              const std::string& version)
+{
+    auto appInstalled{false};
+    try {
+        appInstalled = dataBase->IsAppInstalled(type, id, version);
+    }
+    catch(std::exception& exc) {
+        ERROR("error while checking if app installed: ", exc.what());
+    }
+    return appInstalled;
 }
 
 void Executor::doInstall(std::string type,
@@ -310,13 +334,12 @@ void Executor::doInstall(std::string type,
     INFO("creating storage ", appStoragePath);
     Filesystem::ScopedDir scopedAppStorageDir{appStoragePath};
 
+    setProgress(0, OperationStage::UPDATING_DATABASE);
+    dataBase->AddInstalledApp(type, id, version, url, appName, category, appSubPath);
+
     // everything went fine, mark app directories to not be removed
     scopedAppDir.commit();
     scopedAppStorageDir.commit();
-
-    setProgress(0, OperationStage::UPDATING_DATABASE);
-
-    // TODO add entry to database
 
     setProgress(0, OperationStage::FINISHED);
 
@@ -329,16 +352,17 @@ void Executor::doUninstall(std::string type, std::string id, std::string version
 {
     INFO("type=", type, " id=", id, " version=", version, " uninstallType=", uninstallType);
 
-    // TODO remove from database
+    dataBase->RemoveInstalledApp(type, id, version);
 
     // TODO should "id" be also removed? what if two versions are installed?
     auto appSubPath = Filesystem::createAppPath(type, id, version);
-
     auto appPath = Filesystem::getAppsDir() + appSubPath;
+
     INFO("removing ", appPath);
     Filesystem::removeDirectory(appPath);
 
     if (uninstallType == "full") {
+        dataBase->RemoveAppData(type, id);
         auto appStoragePath = Filesystem::getAppsStorageDir() + appSubPath;
         INFO("removing storage directory ", appStoragePath);
         Filesystem::removeDirectory(appStoragePath);
@@ -378,6 +402,11 @@ std::ostream& operator<<(std::ostream& out, Executor::OperationStage stage)
             "FINISHED"}};
 
     return out << stages[enumToInt(stage)];
+}
+
+std::ostream& operator<<(std::ostream& out, const Executor::OperationStatus& status)
+{
+    return out << (status == Executor::OperationStatus::SUCCESS ? "SUCCESS" : "FAILED") ;
 }
 
 } // namespace LISA

@@ -19,12 +19,20 @@
 
 #pragma once
 
-#include <vector>
 #include <string>
+#include <stdexcept>
+#include <vector>
 
 namespace WPEFramework {
 namespace Plugin {
 namespace LISA {
+
+
+class DataStorageError : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
 
 class DataStorage {
     public:
@@ -32,8 +40,28 @@ class DataStorage {
         virtual void Initialize() = 0;
         virtual std::vector<std::string> GetAppsPaths(const std::string& type, const std::string& id, const std::string& version) = 0;
         virtual std::vector<std::string> GetDataPaths(const std::string& type, const std::string& id) = 0;
-    };
+
+        virtual void AddInstalledApp(const std::string& type,
+                                     const std::string& id,
+                                     const std::string& version,
+                                     const std::string& url,
+                                     const std::string& appName,
+                                     const std::string& category,
+                                     const std::string& appPath) = 0;
+
+        virtual bool IsAppInstalled(const std::string& type,
+                                    const std::string& id,
+                                    const std::string& version) = 0;
+
+        virtual void RemoveInstalledApp(const std::string& type,
+                                        const std::string& id,
+                                        const std::string& version) = 0;
+
+        virtual void RemoveAppData(const std::string& type,
+                                   const std::string& id) = 0;
+};
 
 } // namespace LISA
 } // namespace Plugin
 } // namespace WPEFramework
+

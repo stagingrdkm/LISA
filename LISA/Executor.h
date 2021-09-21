@@ -17,13 +17,15 @@
  * limitations under the License.
  */
 
-#include <functional>
-#include <string>
-#include <thread>
-#include <mutex>
-#include <memory>
+#pragma once
 
 #include "DataStorage.h"
+
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <thread>
 
 namespace WPEFramework {
 namespace Plugin {
@@ -47,6 +49,8 @@ public:
         operationStatusCallback(callback)
     {
     }
+
+    uint32_t Configure(const std::string& dbPath);
 
     uint32_t Install(const std::string& type,
             const std::string& id,
@@ -72,9 +76,16 @@ public:
 
 private:
 
+    void handleDirectories();
+    void initializeDataBase(const std::string& dbpath);
+
     bool isWorkerBusy() const;
     void executeTask(std::function<void()> task);
     void taskRunner(std::function<void()> task);
+
+    bool isAppInstalled(const std::string& type,
+                        const std::string& id,
+                        const std::string& version);
 
     void doInstall(std::string type,
                    std::string id,
@@ -103,18 +114,21 @@ private:
     friend std::ostream& operator<<(std::ostream& out, OperationStage stage);
     void setProgress(int percentValue, OperationStage stage);
 
-    using LockGuard = std::lock_guard<std::mutex>;
+    std::unique_ptr<LISA::DataStorage> dataBase;
 
+    using LockGuard = std::lock_guard<std::mutex>;
     struct Task {
         std::string handle{};
         int progress{0};
     };
     friend std::ostream& operator<<(std::ostream& out, const Task& task);
-
     Task currentTask{};
     std::mutex taskMutex{};
     std::thread worker{};
     OperationStatusCallback operationStatusCallback;
+
+    friend std::ostream& operator<<(std::ostream& out, const OperationStatus& status);
+
 };
 
 } // namespace LISA

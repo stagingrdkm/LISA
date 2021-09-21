@@ -17,20 +17,40 @@
  * limitations under the License.
  */
 
+#include "Debug.h"
+#include "SqlDataStorage.h"
+
 #include <fstream>
 #include <string.h>
 #include <sstream>
-#include "Debug.h"
-#include "SqlDataStorage.h"
 
 #ifndef SQLITE_FILE_HEADER
 #define SQLITE_FILE_HEADER "SQLite format 3"
 #endif
 
-
 namespace WPEFramework {
 namespace Plugin {
 namespace LISA {
+
+namespace { // anonymous
+    struct SqliteDeleter
+    {
+        void operator()(void *ptr)
+        {
+            if (ptr) {
+                sqlite3_free(ptr);
+            }
+        }
+    };
+    using SqlUniqueString = std::unique_ptr<char, SqliteDeleter>;
+
+    std::string timeNow()
+    {
+        const auto now = std::chrono::system_clock::now();
+        std::time_t todayTime = std::chrono::system_clock::to_time_t(now);
+        return std::ctime(&todayTime);
+    }
+} // namespace anonymous
 
     sqlite3* SqlDataStorage::sqlite = nullptr;
 
@@ -49,35 +69,91 @@ namespace LISA {
 
     void SqlDataStorage::Initialize()
     {
-        if(InitDB() == false) {
-            ERROR("Initializing database failed!");
-            throw SqlDataStorageError("Initializing database failed!");
-        }
+        InitDB();
     }
 
-    bool SqlDataStorage::InitDB()
+    void SqlDataStorage::AddInstalledApp(const std::string& type,
+                                         const std::string& id,
+                                         const std::string& version,
+                                         const std::string& url,
+                                         const std::string& appName,
+                                         const std::string& category,
+                                         const std::string& appPath)
+    {
+        auto timeCreated = timeNow();
+
+        InsertIntoApps(type, id, appPath, timeCreated);
+        auto appIdx = GetAppIdx(type, id, version);
+        InsertIntoInstalledApps(appIdx, version, appName, category, url, appPath, timeCreated);
+    }
+
+    bool SqlDataStorage::IsAppInstalled(const std::string& type,
+                                        const std::string& id,
+                                        const std::string& version)
+    {
+        int appIdx{INVALID_INDEX};
+
+        std::stringstream query;
+        query << "SELECT idx FROM installed_apps";
+        query << " WHERE app_idx IN (SELECT idx FROM apps WHERE type == '" << type << "'";
+        query << " AND app_id == '" << id << "')";
+        query << " AND version == '" << version << "';";
+
+        ExecuteCommand(query.str(), [](void* appIdx,
+                                       int columns,
+                                       char** columnsTxt,
+                                       char** columnName) -> int {
+
+                                           ASSERT(columnsTxt && columnsTxt[0]);
+                                           try {
+                                               *(static_cast<int*>(appIdx)) = std::stoi(columnsTxt[0]);
+                                           }
+                                           catch(...) {
+                                               // skip silently
+                                           }
+                                           return 0;
+                                       }, reinterpret_cast<void*>(&appIdx));
+
+        return appIdx != INVALID_INDEX;
+    }
+
+    void SqlDataStorage::RemoveInstalledApp(const std::string& type,
+                                            const std::string& id,
+                                            const std::string& version)
+    {
+        DeleteFromInstalledApps(type, id, version);
+    }
+
+    void SqlDataStorage::RemoveAppData(const std::string& type,
+                                       const std::string& id)
+    {
+        DeleteFromApps(type, id);
+    }
+
+    void SqlDataStorage::InitDB()
     {
         INFO("Initializing database");
         Terminate();
-        return OpenConnection() && CreateTables() && EnableForeignKeys();
+        OpenConnection();
+        Validate();
+        CreateTables();
+        EnableForeignKeys();
     }
 
-    bool SqlDataStorage::OpenConnection()
+    void SqlDataStorage::OpenConnection()
     {
         INFO("Opening database connection: ", db_path);
         bool rc = sqlite3_open(db_path.c_str(), &sqlite);
-        if(rc) {
-            ERROR("Error opening connection: ", rc, " - ", sqlite3_errmsg(sqlite));
-            return false;
+        if (rc) {
+            auto msg = std::string{"Error opening connection: "} + std::to_string(rc) + " - " + sqlite3_errmsg(sqlite);
+            throw SqlDataStorageError(msg);
         }
-        Validate();
-        return true;
     }
 
-    bool SqlDataStorage::CreateTables() const
+    void SqlDataStorage::CreateTables() const
     {
         INFO("Creating LISA tables");
-        bool apps = ExecuteCommand("CREATE TABLE IF NOT EXISTS apps("
+        ExecuteCommand("CREATE TABLE IF NOT EXISTS apps("
                                     "idx INTEGER PRIMARY KEY,"
                                     "type TEXT NOT NULL,"
                                     "app_id TEXT NOT NULL,"
@@ -85,7 +161,7 @@ namespace LISA {
                                     "created TEXT NOT NULL"
                                     ");");
 
-        bool installed_apps = ExecuteCommand("CREATE TABLE IF NOT EXISTS installed_apps ("
+        ExecuteCommand("CREATE TABLE IF NOT EXISTS installed_apps ("
                                               "idx INTEGER PRIMARY KEY,"
                                               "app_idx INTEGER NOT NULL,"
                                               "version TEXT NOT NULL,"
@@ -93,45 +169,49 @@ namespace LISA {
                                               "category TEXT,"
                                               "url TEXT,"
                                               "app_path TEXT,"
-                                              "created INTEGER NOT NULL,"
+                                              "created TEXT NOT NULL,"
                                               "resources TEXT,"
                                               "metadata TEXT,"
                                               "FOREIGN KEY(app_idx) REFERENCES apps(idx)"
                                               ");");
-        return apps && installed_apps;
     }
 
-    bool SqlDataStorage::EnableForeignKeys() const
+    void SqlDataStorage::EnableForeignKeys() const
     {
         INFO("Enabling foreign keys");
-        return ExecuteCommand("PRAGMA foreign_keys = ON;");
+        ExecuteCommand("PRAGMA foreign_keys = ON;");
     }
 
-    bool SqlDataStorage::ExecuteCommand(const std::string& command, SqlCallback callback, void* val) const
+    void SqlDataStorage::ExecuteCommand(const std::string& command, SqlCallback callback, void* val) const
     {
-        char* errmsg;
-        int rc = sqlite3_exec(sqlite, command.c_str(), callback, val, &errmsg);
-        if(rc != SQLITE_OK || errmsg) {
-            if (errmsg) {
-                ERROR("Error executin command: ", command, " - ", rc, " : ", errmsg);
-                sqlite3_free(errmsg);
-            } else {
-                ERROR("Error executin command: ", command, " - ", rc);
-            }
-            return false;
+        char* rawErrorMsg{};
+        int rc = sqlite3_exec(sqlite, command.c_str(), callback, val, &rawErrorMsg);
+
+        SqlUniqueString errorMsg{rawErrorMsg};
+        if(rc != SQLITE_OK || errorMsg)
+        {
+            auto msg = std::string{"error "} + errorMsg.get() + " while executing " + command;
+            throw SqlDataStorageError(msg);
         }
-        return true;
     }
 
     void SqlDataStorage::Validate() const
     {
-        bool ret = 0;
-        int rc = ExecuteCommand("PRAGMA integrity_check;", [](void* ret, int, char** resp, char**)->int
-        {
-            *static_cast<bool*>(ret) = strcmp(resp[0], "ok");
-            return 0;
-        }, &ret);
-        if(ret | !rc) {
+        bool integrityCheckFailed{true};
+        try {
+            ExecuteCommand("PRAGMA integrity_check;", [](void* integrityCheckFailed, int, char** resp, char**)->int
+            {
+                *static_cast<bool*>(integrityCheckFailed) = strcmp(resp[0], "ok");
+                return 0;
+            }, &integrityCheckFailed);
+        }
+        catch(SqlDataStorageError& exc) {
+            ERROR("error ", exc.what());
+            integrityCheckFailed = true;
+        }
+
+        if (integrityCheckFailed) {
+            ERROR("database integrity check failed, dropping tables");
             ExecuteCommand("DROP TABLE apps;");
             ExecuteCommand("DROP TABLE installed_apps;");
         }
@@ -184,6 +264,99 @@ namespace LISA {
         return paths;
     }
 
+    void SqlDataStorage::InsertIntoApps(const std::string& type,
+                                        const std::string& id,
+                                        const std::string& appPath,
+                                        const std::string& timeCreated)
+    {
+        std::stringstream query;
+        query << "INSERT INTO apps VALUES(NULL, ";
+        query << "'" << type << "', ";
+        query << "'" << id << "', ";
+        query << "'" << appPath << "', ";
+        query << "'" << timeCreated + "');";
+
+        ExecuteCommand(query.str());
+    }
+
+    int SqlDataStorage::GetAppIdx(const std::string& type,
+                                  const std::string& id,
+                                  const std::string& version)
+    {
+        int appIdx{INVALID_INDEX};
+
+        std::stringstream query;
+        query << "SELECT idx";
+        query << " FROM apps WHERE type == '" << type << "' AND app_id == '" << id;
+        query << "';";
+
+        ExecuteCommand(query.str(), [](void* appIdx,
+                                       int columns,
+                                       char** columnsTxt,
+                                       char** columnName) -> int {
+
+                                           ASSERT(columnsTxt && columnsTxt[0]);
+                                           try {
+                                               *(static_cast<int*>(appIdx)) = std::stoi(columnsTxt[0]);
+                                           }
+                                           catch(...) {
+                                               ERROR("error while converting index");
+                                           }
+                                           return 0;
+                                       }, reinterpret_cast<void*>(&appIdx));
+        return appIdx;
+    }
+
+    void SqlDataStorage::InsertIntoInstalledApps(int appIdx,
+                                             const std::string& version,
+                                             const std::string& name,
+                                             const std::string& category,
+                                             const std::string& url,
+                                             const std::string& appPath,
+                                             const std::string& timeCreated)
+    {
+        assert(appIdx != INVALID_INDEX);
+
+        std::stringstream query;
+        query << "INSERT INTO installed_apps VALUES(NULL, ";
+        query << std::to_string(appIdx) << ", ";
+        query << "'" << version << "', ";
+        query << "'" << name << "', ";
+        query << "'" << category << "', ";
+        query << "'" << url << "', ";
+        query << "'" << appPath << "', ";
+        query << "'" << timeCreated << "', ";
+        query << "NULL, ";
+        query << "NULL);";
+
+        ExecuteCommand(query.str());
+    }
+
+    void SqlDataStorage::DeleteFromInstalledApps(const std::string& type,
+                                                 const std::string& id,
+                                                 const std::string& version)
+    {
+        auto appIdx = GetAppIdx(type, id, version);
+
+        std::stringstream query;
+        query << "DELETE FROM installed_apps";
+        query << " WHERE idx == " << std::to_string(appIdx);
+        query << ";";
+
+        ExecuteCommand(query.str());
+    }
+
+    void SqlDataStorage::DeleteFromApps(const std::string& type,
+                                        const std::string& id)
+    {
+        std::stringstream query;
+        query << "DELETE FROM apps";
+        query << " WHERE type == '" << type << "'";
+        query << " AND app_id == '" << id << "'";
+        query << ";";
+
+        ExecuteCommand(query.str());
+    }
 
 } // namespace LISA
 } // namespace Plugin
