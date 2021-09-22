@@ -50,15 +50,14 @@ namespace Plugin {
 
             std::string path = (config.DbPath.IsSet() && !config.DbPath.Value().empty())
                             ? config.DbPath.Value() : service->PersistentPath();
-            if (_lisa->Configure(path)) {
-                TRACE(Trace::Information, (_T("LISA::Initialize register notification")));
-                _lisa->Register(&_notification);
 
-                TRACE(Trace::Information, (_T("LISA::Initialize register JSON-RPC API")));
-                Register(*this, _lisa);
-            } else {
-                message = _T("LISA could not be instantiated - could not initialize database.");
-            }
+            _lisa->Configure(path);
+
+            TRACE(Trace::Information, (_T("LISA::Initialize register notification")));
+            _lisa->Register(&_notification);
+
+            TRACE(Trace::Information, (_T("LISA::Initialize register JSON-RPC API")));
+            Register(*this, _lisa);
         }
 
         if (_lisa == nullptr) {
