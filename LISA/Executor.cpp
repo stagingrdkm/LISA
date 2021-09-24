@@ -168,8 +168,7 @@ bool Executor::getStorageParamsValid(const std::string& type,
 uint32_t Executor::GetStorageDetails(const std::string& type,
                            const std::string& id,
                            const std::string& version,
-                           Filesystem::StorageDetails& details,
-                           std::shared_ptr<LISA::DataStorage> storage)
+                           Filesystem::StorageDetails& details)
 {
     namespace fs = Filesystem;
     if(!getStorageParamsValid(type, id, version)) {
@@ -184,20 +183,20 @@ uint32_t Executor::GetStorageDetails(const std::string& type,
         details.persistentUsedKB = std::to_string(fs::getDirectorySpace(fs::getAppsStorageDir()));
     } else {
         INFO("Calculating usage for: type = ", type, " id = ", id, " version = ", version);
-        std::vector<std::string> appsPaths = storage->GetAppsPaths(type, id, version);
+        std::vector<std::string> appsPaths = dataBase->GetAppsPaths(type, id, version);
         long appUsedKB{};
         // In Stage 1 there will be only one entry here
         for(const auto& i: appsPaths)
         {
             appUsedKB += fs::getDirectorySpace(i);
-            details.appPath = i;
+            details.appPath = fs::getAppsDir() + i;
         }
-        std::vector<std::string> dataPaths = storage->GetDataPaths(type, id);
+        std::vector<std::string> dataPaths = dataBase->GetDataPaths(type, id);
         long persistentUsedKB{};
         for(const auto& i: dataPaths)
         {
             persistentUsedKB += fs::getDirectorySpace(i);
-            details.persistentPath = i;
+            details.persistentPath = fs::getAppsStorageDir() + i;
         }
         details.appUsedKB = std::to_string(appUsedKB);
         details.persistentUsedKB = std::to_string(persistentUsedKB);

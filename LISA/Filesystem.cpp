@@ -187,7 +187,7 @@ long getDirectorySpace(const std::string& path)
         if(directoryExists(path)) {
             for(bf::recursive_directory_iterator it(path); it != bf::recursive_directory_iterator(); ++it)
             {
-                if(!bf::is_directory(*it) && !bf::is_symlink(*it)) {
+                if(bf::exists(*it) && !bf::is_directory(*it) && !bf::is_symlink(*it)) {
                     space += bf::file_size(*it);
                 }
             }
