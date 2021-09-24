@@ -70,7 +70,7 @@ class SqlDataStorage: public DataStorage
 
     private:
         static sqlite3* sqlite;
-        const std::string db_name = "/apps.db";
+        const std::string db_name = "apps.db";
         const std::string db_path;
         using SqlCallback = int (*)(void*, int, char**, char**);
         constexpr static int INVALID_INDEX = -1;

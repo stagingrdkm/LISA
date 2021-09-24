@@ -28,6 +28,7 @@ find_package(Sqlite REQUIRED)
 
 add_library(${MODULE_NAME} SHARED
     Archive.cpp
+    Config.cpp
     Downloader.cpp
     Executor.cpp
     File.cpp

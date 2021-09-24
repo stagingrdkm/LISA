@@ -63,12 +63,12 @@ void lisaInternalMakeLogMessage(Args&&... args)
 
 #define INFO_THIS(...) do { \
     LOG_INTERNAL(__VA_ARGS__) \
-    TRACE(Trace::Information, ("%s", str.c_str())); \
+    TRACE_L1("%s", str.c_str()); \
     } while(0)
 
 #define ERROR(...) do { \
     LOG_INTERNAL(__VA_ARGS__) \
-    TRACE_GLOBAL(Trace::Error, ("%s", str.c_str())); \
+    TRACE_L1("ERROR %s", str.c_str()); \
     } while(0)
 #else // #ifdef FORCE_TRACE_L1_DEBUGS
 #define INFO(...) do { \

@@ -48,12 +48,27 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+class CancelledException : public std::exception
+{
+public:
+    using std::exception::exception;
+};
+
+class DownloaderListener
+{
+public:
+    virtual ~DownloaderListener() = default;
+
+    virtual void setProgress(int progress) = 0;
+    virtual bool isCancelled() = 0;
+};
+
 class Downloader
 {
 public:
-    using ProgressListener = std::function<void(int)>;
-
-    Downloader(const std::string& uri, ProgressListener listner);
+    Downloader(const std::string& uri, DownloaderListener& aListener);
+    Downloader(const Downloader& other) = delete;
+    Downloader& operator=(const Downloader& other) = delete;
 
     long getContentLength();
     void get(const std::string& destination);
@@ -89,10 +104,10 @@ private:
             return total == 0 ? 0 : (static_cast<int>((static_cast<double>(now) * 100) / total));
         }
     };
-    friend std::ostream& operator<<(std::ostream& out, const Progress& progress);
+    friend std::ostream& operator<<(std::ostream& out, const Progress& aProgress);
     Progress progress{};
 
-    ProgressListener progressListener{};
+    DownloaderListener& listener;
 
     // TODO read from config
     static auto constexpr DEFAULT_RETRY_AFTER{300};
