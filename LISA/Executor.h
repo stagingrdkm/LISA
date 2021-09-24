@@ -71,8 +71,7 @@ public:
     uint32_t GetStorageDetails(const std::string& type,
             const std::string& id,
             const std::string& version,
-            Filesystem::StorageDetails& details,
-            std::shared_ptr<LISA::DataStorage> storage);
+            Filesystem::StorageDetails& details);
 
 private:
 

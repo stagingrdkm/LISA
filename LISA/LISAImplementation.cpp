@@ -620,7 +620,7 @@ public:
             details.persistentUsedKB = appsStorageKBCache;
         } else {
             INFO("Calculating storage usage");
-            ret = executor.GetStorageDetails(type, id, version, details, ds);
+            ret = executor.GetStorageDetails(type, id, version, details);
         }
         result = Core::Service<StoragePayloadImpl>::Create<ILISA::IStoragePayload>(details);
         return ret;
@@ -636,7 +636,6 @@ private:
     using LockGuard = std::lock_guard<std::mutex>;
     std::list<Exchange::ILISA::INotification*> _notificationCallbacks{};
     std::mutex notificationMutex{};
-    std::shared_ptr<LISA::DataStorage> ds;
     std::string appsKBCache{};
     std::string appsStorageKBCache{};
 };
