@@ -54,7 +54,7 @@ void lisaInternalMakeLogMessage(Args&&... args)
 /** INTERNAL HELPERS END ***************************************************************/
 
 // use TRACE_L1 - for easier development, no need to set TRACE after every restart
-//#define FORCE_TRACE_L1_DEBUGS
+#define FORCE_TRACE_L1_DEBUGS
 #ifdef FORCE_TRACE_L1_DEBUGS
 #define INFO(...) do { \
     LOG_INTERNAL(__VA_ARGS__) \

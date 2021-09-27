@@ -36,10 +36,22 @@ public:
 
 class DataStorage {
     public:
+        struct AppDetails
+        {
+            std::string type;
+            std::string id;
+            std::string version;
+            std::string appName;
+            std::string category;
+            std::string url;
+        };
+
         virtual ~DataStorage() {}
         virtual void Initialize() = 0;
         virtual std::vector<std::string> GetAppsPaths(const std::string& type, const std::string& id, const std::string& version) = 0;
         virtual std::vector<std::string> GetDataPaths(const std::string& type, const std::string& id) = 0;
+        virtual std::vector<AppDetails> GetAppDetailsList(const std::string& type, const std::string& id, const std::string& version,
+                                                          const std::string& appName, const std::string& category) = 0;
 
         virtual void AddInstalledApp(const std::string& type,
                                      const std::string& id,

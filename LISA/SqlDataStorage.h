@@ -43,7 +43,11 @@ class SqlDataStorage: public DataStorage
 
         void Initialize() override;
         std::vector<std::string> GetAppsPaths(const std::string& type, const std::string& id, const std::string& version) override;
+
         std::vector<std::string> GetDataPaths(const std::string& type, const std::string& id) override;
+
+        std::vector<DataStorage::AppDetails> GetAppDetailsList(const std::string& type, const std::string& id, const std::string& version,
+                                                  const std::string& appName, const std::string& category) override;
 
         void AddInstalledApp(const std::string& type,
                              const std::string& id,
@@ -78,7 +82,7 @@ class SqlDataStorage: public DataStorage
         void EnableForeignKeys() const;
         void ExecuteCommand(const std::string& command, SqlCallback callback = nullptr, void* val = nullptr) const;
         void Validate() const;
-        std::vector<std::string> GetPaths(const std::string& query) const;
+        std::vector<std::string> GetPaths(sqlite3_stmt* stmt) const;
 
         void InsertIntoApps(const std::string& type,
                             const std::string& id,
@@ -104,6 +108,7 @@ class SqlDataStorage: public DataStorage
         void DeleteFromApps(const std::string& type,
                             const std::string& id);
 
+        void ExecuteSqlStep(sqlite3_stmt* stmt);
     };
 
 } // namespace LISA
