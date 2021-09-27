@@ -25,6 +25,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 #include <thread>
 
 namespace WPEFramework {
@@ -73,6 +74,12 @@ public:
             const std::string& version,
             Filesystem::StorageDetails& details);
 
+   uint32_t GetAppDetailsList(const std::string& type,
+                              const std::string& id,
+                              const std::string& version,
+                              const std::string& appName,
+                              const std::string& category,
+                              std::vector<DataStorage::AppDetails>& appsDetailsList) const;
 private:
 
     void handleDirectories();

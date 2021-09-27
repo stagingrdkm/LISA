@@ -174,32 +174,52 @@ uint32_t Executor::GetStorageDetails(const std::string& type,
     if(!getStorageParamsValid(type, id, version)) {
         return ERROR_WRONG_PARAMS;
     }
+    try {
+        if(type.empty()) {
+            INFO("Calculating overall usage");
+            details.appPath = fs::getAppsDir();
+            details.appUsedKB = std::to_string((fs::getDirectorySpace(fs::getAppsDir()) + fs::getDirectorySpace(fs::getAppsTmpDir())) / 1024);
+            details.persistentPath = fs::getAppsStorageDir();
+            details.persistentUsedKB = std::to_string(fs::getDirectorySpace(fs::getAppsStorageDir()) / 1024);
+        } else {
+            INFO("Calculating usage for: type = ", type, " id = ", id, " version = ", version);
+            std::vector<std::string> appsPaths = dataBase->GetAppsPaths(type, id, version);
+            long appUsedKB{};
+            // In Stage 1 there will be only one entry here
+            for(const auto& i: appsPaths)
+            {
+                appUsedKB += fs::getDirectorySpace(i);
+                details.appPath = fs::getAppsDir() + i;
+            }
+            std::vector<std::string> dataPaths = dataBase->GetDataPaths(type, id);
+            long persistentUsedKB{};
+            for(const auto& i: dataPaths)
+            {
+                persistentUsedKB += fs::getDirectorySpace(i);
+                details.persistentPath = fs::getAppsStorageDir() + i;
+            }
+            details.appUsedKB = std::to_string(appUsedKB / 1024);
+            details.persistentUsedKB = std::to_string(persistentUsedKB / 1024);
+        }
+    } catch (std::exception& error) {
+        ERROR("Unable to retrive storage details: ", error.what());
+        return Core::ERROR_GENERAL;
+    }
+    return ERROR_NONE;
+}
 
-    if(type.empty()) {
-        INFO("Calculating overall usage");
-        details.appPath = fs::getAppsDir();
-        details.appUsedKB = std::to_string(fs::getDirectorySpace(fs::getAppsDir()) + fs::getDirectorySpace(fs::getAppsTmpDir()));
-        details.persistentPath = fs::getAppsStorageDir();
-        details.persistentUsedKB = std::to_string(fs::getDirectorySpace(fs::getAppsStorageDir()));
-    } else {
-        INFO("Calculating usage for: type = ", type, " id = ", id, " version = ", version);
-        std::vector<std::string> appsPaths = dataBase->GetAppsPaths(type, id, version);
-        long appUsedKB{};
-        // In Stage 1 there will be only one entry here
-        for(const auto& i: appsPaths)
-        {
-            appUsedKB += fs::getDirectorySpace(i);
-            details.appPath = fs::getAppsDir() + i;
-        }
-        std::vector<std::string> dataPaths = dataBase->GetDataPaths(type, id);
-        long persistentUsedKB{};
-        for(const auto& i: dataPaths)
-        {
-            persistentUsedKB += fs::getDirectorySpace(i);
-            details.persistentPath = fs::getAppsStorageDir() + i;
-        }
-        details.appUsedKB = std::to_string(appUsedKB);
-        details.persistentUsedKB = std::to_string(persistentUsedKB);
+uint32_t Executor::GetAppDetailsList(const std::string& type,
+                          const std::string& id,
+                          const std::string& version,
+                          const std::string& appName,
+                          const std::string& category,
+                          std::vector<DataStorage::AppDetails>& appsDetailsList) const
+{
+    try {
+        appsDetailsList = dataBase->GetAppDetailsList(type, id, version, appName, category);
+    } catch (std::exception& error) {
+        ERROR("Unable to get Applications details: ", error.what());
+        return Core::ERROR_GENERAL;
     }
     return ERROR_NONE;
 }
