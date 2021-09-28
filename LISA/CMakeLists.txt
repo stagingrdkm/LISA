@@ -24,7 +24,7 @@ find_package(CompileSettingsDebug CONFIG REQUIRED)
 find_package(CURL REQUIRED)
 find_package(LibArchive REQUIRED)
 find_package(Boost COMPONENTS system filesystem REQUIRED)
-pkg_search_module(SQLITE REQUIRED sqlite3)
+find_package(Sqlite REQUIRED)
 
 add_library(${MODULE_NAME} SHARED
     Archive.cpp
