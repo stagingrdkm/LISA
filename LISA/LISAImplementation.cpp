@@ -20,10 +20,12 @@
 #include "Debug.h"
 #include "Executor.h"
 #include "Filesystem.h"
+#include "DataStorage.h"
 
 #include <interfaces/ILISA.h>
 #include <string>
 #include <mutex>
+#include <map>
 
 namespace WPEFramework {
 namespace Plugin {
@@ -572,37 +574,24 @@ public:
         IAppsPayload*& result) const override
     {
         INFO("");
-    
-        // Create versions of the apps
-        std::list<AppVersionImpl*> app1_versions;
-        AppVersionImpl* app1_version1 = Core::Service<AppVersionImpl>::Create<AppVersionImpl>(
-            Core::ToString("1.0.0"), Core::ToString("app1"), Core::ToString("category1"), Core::ToString("http://app1.domain.com/v1"));
-        AppVersionImpl* app1_version2 = Core::Service<AppVersionImpl>::Create<AppVersionImpl>(
-            Core::ToString("1.1.0"), Core::ToString("app1"), Core::ToString("category1"), Core::ToString("http://app1.domain.com/v11"));
 
-        app1_versions.push_back(app1_version1);
-        app1_versions.push_back(app1_version2);
-
-        std::list<AppVersionImpl*> app2_versions;
-        AppVersionImpl* app2_version1 = Core::Service<AppVersionImpl>::Create<AppVersionImpl>(
-            Core::ToString("2.0.0"), Core::ToString("app2"), Core::ToString("category2"), Core::ToString("http://app2.domain.com/v2"));
-        app2_versions.push_back(app2_version1);
-
-        // Create apps
-        AppImpl* app1 = Core::Service<AppImpl>::Create<AppImpl>(
-            Core::ToString("app1_type"), Core::ToString("id.app1"), app1_versions);
-        AppImpl* app2 = Core::Service<AppImpl>::Create<AppImpl>(
-            Core::ToString("app2_type"), Core::ToString("id.app2"), app2_versions);
+        std::vector<LISA::DataStorage::AppDetails> appsDetailsList{};
+        auto rc = executor.GetAppDetailsList(type, id, version, appName, category, appsDetailsList);
+        std::map<std::pair<std::string, std::string>, std::list<AppVersionImpl*>> appsDet;
+        for(const auto& app: appsDetailsList)
+        {
+            appsDet[{app.type, app.id}].push_back(Core::Service<AppVersionImpl>::Create<AppVersionImpl>(app.version, app.appName, app.category, app.url));
+        }
         std::list<AppImpl*> apps;
-        apps.push_back(app1);
-        apps.push_back(app2);
-
-        INFO("apps: ", apps.size());
+        for(const auto& app: appsDet)
+        {
+            apps.push_back(Core::Service<AppImpl>::Create<AppImpl>(app.first.first, app.first.second, app.second));
+        }
         
         // Create apps payload which will be returned as the result
         ILISA::IAppsPayload* appsPayload = Core::Service<AppsPayloadImpl>::Create<ILISA::IAppsPayload>(apps);
         result = appsPayload;
-        return Core::ERROR_NONE;
+        return rc;
     }
 
     uint32_t GetStorageDetails(const std::string& type,

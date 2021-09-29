@@ -91,30 +91,23 @@ namespace { // anonymous
                                         const std::string& id,
                                         const std::string& version)
     {
-        int appIdx{INVALID_INDEX};
+        INFO("");
+        string query = "SELECT idx FROM installed_apps WHERE app_idx IN (SELECT idx FROM apps WHERE type = ?1 AND app_id = ?2 AND version = ?3);";
+        sqlite3_stmt* stmt;
+        sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
 
-        std::stringstream query;
-        query << "SELECT idx FROM installed_apps";
-        query << " WHERE app_idx IN (SELECT idx FROM apps WHERE type == '" << type << "'";
-        query << " AND app_id == '" << id << "')";
-        query << " AND version == '" << version << "';";
-
-        ExecuteCommand(query.str(), [](void* appIdx,
-                                       int columns,
-                                       char** columnsTxt,
-                                       char** columnName) -> int {
-
-                                           ASSERT(columnsTxt && columnsTxt[0]);
-                                           try {
-                                               *(static_cast<int*>(appIdx)) = std::stoi(columnsTxt[0]);
-                                           }
-                                           catch(...) {
-                                               // skip silently
-                                           }
-                                           return 0;
-                                       }, reinterpret_cast<void*>(&appIdx));
-
-        return appIdx != INVALID_INDEX;
+        sqlite3_bind_text(stmt, 1, type.empty() ? nullptr : type.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, id.empty() ? nullptr : id.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 3, version.empty() ? nullptr : version.c_str(), -1, SQLITE_TRANSIENT);
+        int rc = sqlite3_step(stmt);
+        sqlite3_finalize(stmt);
+        if (rc == SQLITE_ROW) {
+            return true;
+        } else if (rc == SQLITE_DONE) {
+            return false;
+        } else {
+            throw SqlDataStorageError(std::string{"sqlite error: "} + sqlite3_errmsg(sqlite));
+        }
     }
 
     void SqlDataStorage::RemoveInstalledApp(const std::string& type,
@@ -219,49 +212,74 @@ namespace { // anonymous
 
     std::vector<std::string> SqlDataStorage::GetAppsPaths(const std::string& type, const std::string& id, const std::string& version)
     {
-        std::stringstream query;
-        query << "SELECT app_path FROM installed_apps";
-        if(!type.empty()) {
-            query << " WHERE app_idx IN (SELECT idx FROM apps WHERE type == '" << type << "'";
-            if(!id.empty()) {
-                query << " AND app_id == '" << id << "')";
-                if(!version.empty()) {
-                    query << " AND version == '" << version << "'";
-                }
-            } else {
-                query << ")";
-            }
-        }
-        query << ";";
-        return GetPaths(query.str());
+        INFO("");
+        string query = "SELECT app_path FROM installed_apps WHERE app_idx IN (SELECT idx FROM apps WHERE (?1 IS NULL OR type = ?1) AND (?2 IS NULL OR app_id = ?2)) AND (?3 IS NULL OR version = ?3)";
+        sqlite3_stmt* stmt;
+        sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
+
+        sqlite3_bind_text(stmt, 1, type.empty() ? nullptr : type.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, id.empty() ? nullptr : id.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 3, version.empty() ? nullptr : version.c_str(), -1, SQLITE_TRANSIENT);
+        auto paths = GetPaths(stmt);
+        sqlite3_finalize(stmt);
+        return paths;
     }
 
     std::vector<std::string> SqlDataStorage::GetDataPaths(const std::string& type, const std::string& id)
     {
-        std::stringstream query;
-        query << "SELECT data_path FROM apps";
-        if(!type.empty()) {
-            query << " WHERE type == '" << type << "'";
-            if(!id.empty()) {
-                query << " AND app_id == '" << id << "'";
-            }
-        }
-        query << ";";
-        return GetPaths(query.str());
+        INFO("");
+        string query = "SELECT data_path FROM apps WHERE (?1 IS NULL OR type = ?1) AND (?2 IS NULL OR app_id = ?2)";
+        sqlite3_stmt* stmt;
+        sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
+
+        sqlite3_bind_text(stmt, 1, type.empty() ? nullptr : type.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, id.empty() ? nullptr : id.c_str(), -1, SQLITE_TRANSIENT);
+        auto paths = GetPaths(stmt);
+        sqlite3_finalize(stmt);
+        return paths;
     }
 
-    std::vector<std::string> SqlDataStorage::GetPaths(const std::string& query) const
+    std::vector<std::string> SqlDataStorage::GetPaths(sqlite3_stmt* stmt) const
     {
+        INFO("");
         std::vector<std::string> paths;
-        ExecuteCommand(query.c_str(), [](void* paths, int columns, char** resp, char**)->int
-        {
-            for(auto i = 0; i < columns; ++i)
-            {
-                static_cast<std::vector<std::string>*>(paths)->push_back(resp[i]);
-            }
-            return 0;
-        }, &paths);
+        int rc{};
+        while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+            paths.push_back(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)));
+        }
+        if (rc != SQLITE_DONE) {
+            throw SqlDataStorageError(std::string{"sqlite error: "} + sqlite3_errmsg(sqlite));
+        }
         return paths;
+    }
+
+    std::vector<DataStorage::AppDetails> SqlDataStorage::GetAppDetailsList(const std::string& type, const std::string& id, const std::string& version,
+                                                              const std::string& appName, const std::string& category)
+    {
+        INFO("");
+        string query = "SELECT A.type,A.app_id,IA.version,IA.name,IA.category,IA.url FROM installed_apps IA, apps A WHERE (IA.app_idx == A.idx) AND (?1 IS NULL OR A.type = ?1) AND (?2 IS NULL OR app_id = ?2) "
+                       "AND (?3 IS NULL OR version = ?3) AND (?4 IS NULL OR name = ?4) AND (?5 IS NULL OR category = ?5);";
+        sqlite3_stmt* stmt;
+        sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
+        sqlite3_bind_text(stmt, 1, type.empty() ? nullptr : type.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, id.empty() ? nullptr : id.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 3, version.empty() ? nullptr : version.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 4, appName.empty() ? nullptr : appName.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 5, category.empty() ? nullptr : category.c_str(), -1, SQLITE_TRANSIENT);
+        int rc{};
+        std::vector<AppDetails> appsList;
+        while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+
+            appsList.push_back(AppDetails{reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)), reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1)),
+                          reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2)), reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3)),
+                          reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4)), reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5))});
+        }
+        if (rc != SQLITE_DONE) {
+            sqlite3_finalize(stmt);
+            throw SqlDataStorageError(std::string{"sqlite error: "} + sqlite3_errmsg(sqlite));
+        }
+        sqlite3_finalize(stmt);
+        return appsList;
     }
 
     void SqlDataStorage::InsertIntoApps(const std::string& type,
@@ -269,41 +287,37 @@ namespace { // anonymous
                                         const std::string& appPath,
                                         const std::string& timeCreated)
     {
-        std::stringstream query;
-        query << "INSERT INTO apps VALUES(NULL, ";
-        query << "'" << type << "', ";
-        query << "'" << id << "', ";
-        query << "'" << appPath << "', ";
-        query << "'" << timeCreated + "');";
+        INFO("");
+        string query = "INSERT INTO apps VALUES(NULL, $1, $2, $3, $4);";
+        sqlite3_stmt* stmt;
+        sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
 
-        ExecuteCommand(query.str());
+        sqlite3_bind_text(stmt, 1, type.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, id.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 3, appPath.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 4, timeCreated.c_str(), -1, SQLITE_TRANSIENT);
+        ExecuteSqlStep(stmt);
+        sqlite3_finalize(stmt);
     }
 
     int SqlDataStorage::GetAppIdx(const std::string& type,
                                   const std::string& id,
                                   const std::string& version)
     {
+        INFO("");
         int appIdx{INVALID_INDEX};
+        string query = "SELECT idx FROM apps WHERE type == $1 AND app_id ==  $2;";
+        sqlite3_stmt* stmt;
+        sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
 
-        std::stringstream query;
-        query << "SELECT idx";
-        query << " FROM apps WHERE type == '" << type << "' AND app_id == '" << id;
-        query << "';";
-
-        ExecuteCommand(query.str(), [](void* appIdx,
-                                       int columns,
-                                       char** columnsTxt,
-                                       char** columnName) -> int {
-
-                                           ASSERT(columnsTxt && columnsTxt[0]);
-                                           try {
-                                               *(static_cast<int*>(appIdx)) = std::stoi(columnsTxt[0]);
-                                           }
-                                           catch(...) {
-                                               ERROR("error while converting index");
-                                           }
-                                           return 0;
-                                       }, reinterpret_cast<void*>(&appIdx));
+        sqlite3_bind_text(stmt, 1, type.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, id.c_str(), -1, SQLITE_TRANSIENT);
+        if (sqlite3_step(stmt) != SQLITE_ROW) {
+            sqlite3_finalize(stmt);
+            throw SqlDataStorageError(std::string{"sqlite error: "} + sqlite3_errmsg(sqlite));
+        }
+        appIdx = sqlite3_column_int(stmt, 0);
+        sqlite3_finalize(stmt);
         return appIdx;
     }
 
@@ -315,49 +329,61 @@ namespace { // anonymous
                                              const std::string& appPath,
                                              const std::string& timeCreated)
     {
+        INFO("");
         assert(appIdx != INVALID_INDEX);
+        string query = "INSERT INTO installed_apps VALUES(NULL, $1, $2, $3, $4, $5, $6, $7, NULL, NULL);";
+        sqlite3_stmt* stmt;
+        sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
 
-        std::stringstream query;
-        query << "INSERT INTO installed_apps VALUES(NULL, ";
-        query << std::to_string(appIdx) << ", ";
-        query << "'" << version << "', ";
-        query << "'" << name << "', ";
-        query << "'" << category << "', ";
-        query << "'" << url << "', ";
-        query << "'" << appPath << "', ";
-        query << "'" << timeCreated << "', ";
-        query << "NULL, ";
-        query << "NULL);";
-
-        ExecuteCommand(query.str());
+        sqlite3_bind_text(stmt, 1, std::to_string(appIdx).c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, version.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 3, name.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 4, category.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 5, url.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 6, appPath.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 7, timeCreated.c_str(), -1, SQLITE_TRANSIENT);
+        ExecuteSqlStep(stmt);
+        sqlite3_finalize(stmt);
     }
 
     void SqlDataStorage::DeleteFromInstalledApps(const std::string& type,
                                                  const std::string& id,
                                                  const std::string& version)
     {
+        INFO("");
         auto appIdx = GetAppIdx(type, id, version);
 
-        std::stringstream query;
-        query << "DELETE FROM installed_apps";
-        query << " WHERE idx == " << std::to_string(appIdx);
-        query << ";";
+        string query = "DELETE FROM installed_apps WHERE app_idx == $1;";
+        sqlite3_stmt* stmt;
+        sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
 
-        ExecuteCommand(query.str());
+        sqlite3_bind_text(stmt, 1, std::to_string(appIdx).c_str(), -1, SQLITE_TRANSIENT);
+        ExecuteSqlStep(stmt);
+        sqlite3_finalize(stmt);
     }
 
     void SqlDataStorage::DeleteFromApps(const std::string& type,
                                         const std::string& id)
     {
-        std::stringstream query;
-        query << "DELETE FROM apps";
-        query << " WHERE type == '" << type << "'";
-        query << " AND app_id == '" << id << "'";
-        query << ";";
+        INFO("");
+        string query = "DELETE FROM apps WHERE type == $1 AND app_id == $2;";
+        sqlite3_stmt* stmt;
+        sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
 
-        ExecuteCommand(query.str());
+        sqlite3_bind_text(stmt, 1, type.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, id.c_str(), -1, SQLITE_TRANSIENT);
+        ExecuteSqlStep(stmt);
+        sqlite3_finalize(stmt);
     }
 
+    void SqlDataStorage::ExecuteSqlStep(sqlite3_stmt* stmt)
+    {
+        INFO("");
+        if (sqlite3_step(stmt) != SQLITE_DONE) {
+            sqlite3_finalize(stmt);
+            throw SqlDataStorageError(std::string{"sqlite error: "} + sqlite3_errmsg(sqlite));
+        }
+    }
 } // namespace LISA
 } // namespace Plugin
 } // namespace WPEFramework
