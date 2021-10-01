@@ -20,8 +20,34 @@
 #include "Debug.h"
 #include "LISA.h"
 
-namespace WPEFramework {
+#include <memory>
 
+namespace { // anonymous
+
+template<typename RPCObject>
+struct RPCDeleter
+{
+    void operator()(RPCObject* ptr)
+    {
+        if (ptr) {
+            ptr->Release();
+        }
+    }
+};
+
+template<typename RPCObject>
+using RPCUnique = std::unique_ptr<RPCObject, RPCDeleter<RPCObject> >;
+
+// just for readability
+template<typename RPCObject>
+RPCUnique<RPCObject> makeUniqueRpc(RPCObject* ptr)
+{
+    return RPCUnique<RPCObject>(ptr);
+}
+
+} // namespace anonymous
+
+namespace WPEFramework {
 namespace Plugin {
 
     using namespace JsonData::LISA;
@@ -34,7 +60,7 @@ namespace Plugin {
             [destination, this](const InstallParamsData& params, Core::JSON::String& response) -> uint32_t 
             {
                 uint32_t errorCode = Core::ERROR_NONE;
-                INFO("LISAJsonRpc Install");
+                INFO("Install");
 
                 std::string result;
                 errorCode = destination->Install(
@@ -46,7 +72,7 @@ namespace Plugin {
                     params.Category.Value(), result);
                 response = result;
 
-                INFO("LISAJsonRpc Install finished with code: ", errorCode);
+                INFO("Install finished with code: ", errorCode);
                 return errorCode;
             });
 
@@ -54,7 +80,7 @@ namespace Plugin {
             [destination, this](const UninstallParamsData& params, Core::JSON::String& response) -> uint32_t 
             {
                 uint32_t errorCode = Core::ERROR_NONE;
-                INFO("LISAJsonRpc Uninstall");
+                INFO("Uninstall");
 
                 std::string result;
                 errorCode = destination->Uninstall(
@@ -64,7 +90,7 @@ namespace Plugin {
                     params.UninstallType.Value(), result);
                 response = result;
 
-                INFO("LISAJsonRpc Uninstall finished with code: ", errorCode);
+                INFO("Uninstall finished with code: ", errorCode);
                 return errorCode;
             });
 
@@ -72,7 +98,7 @@ namespace Plugin {
             [destination, this](const DownloadParamsData& params, Core::JSON::String& response) -> uint32_t 
             {
                 uint32_t errorCode = Core::ERROR_NONE;
-                INFO("LISAJsonRpc Download");
+                INFO("Download");
 
                 std::string result;
                 errorCode = destination->Download(
@@ -83,7 +109,7 @@ namespace Plugin {
                     params.ResUrl.Value(), result);
                 response = result;
 
-                INFO("LISAJsonRpc Download finished with code: ", errorCode);
+                INFO("Download finished with code: ", errorCode);
                 return errorCode;
             });
 
@@ -91,7 +117,7 @@ namespace Plugin {
             [destination, this](const ResetParamsData& params) -> uint32_t 
             {
                 uint32_t errorCode = Core::ERROR_NONE;
-                INFO("LISAJsonRpc Reset");
+                INFO("Reset");
 
                 errorCode = destination->Reset(
                     params.Type.Value(),
@@ -99,7 +125,7 @@ namespace Plugin {
                     params.Version.Value(), 
                     params.ResetType.Value());
 
-                INFO("LISAJsonRpc Reset finished with code: ", errorCode);
+                INFO("Reset finished with code: ", errorCode);
                 return errorCode;
             });
 
@@ -107,28 +133,30 @@ namespace Plugin {
             [destination, this](const GetStorageDetailsParamsInfo& params, StoragepayloadData& response) -> uint32_t 
             {
                 uint32_t errorCode = Core::ERROR_NONE;
-                Exchange::ILISA::IStoragePayload* result = nullptr;
-                Exchange::ILISA::IStorage* iStorage = nullptr;
-                std::string val;
 
-                INFO("LISAJsonRpc GetStorageDetails");
+                INFO("");
 
+                Exchange::ILISA::IStoragePayload* storagePayloadRaw = nullptr;
                 errorCode = destination->GetStorageDetails(
                     params.Type.Value(),
                     params.Id.Value(), 
-                    params.Version.Value(), result);
+                    params.Version.Value(), storagePayloadRaw);
+                auto storagePayload = makeUniqueRpc(storagePayloadRaw);
 
-                if (errorCode != Core::ERROR_NONE) {
-                    ERROR("LISAJsonRpc GetStorageDetails() result: ", errorCode);
-                    return errorCode;
+                if (errorCode != Core::ERROR_NONE || (! storagePayload)) {
+                   ERROR("result: ", errorCode, " storagePayload: ", storagePayload.get());
+                   return errorCode;
                 }
                 
-                errorCode = result->Apps(iStorage);
-                if (errorCode != Core::ERROR_NONE) {
-                    ERROR("LISAJsonRpc Apps() result: ", errorCode);
+                Exchange::ILISA::IStorage* iStorageRaw = nullptr;
+                errorCode = storagePayload->Apps(iStorageRaw);
+                auto iStorage = makeUniqueRpc(iStorageRaw);
+                if (errorCode != Core::ERROR_NONE || (! iStorage)) {
+                    ERROR("Apps() result: ", errorCode, " iStorage: ", iStorage.get());
                     return errorCode;
                 }
 
+                std::string val;
                 iStorage->Path(val);
                 response.Apps.Path = Core::ToString(val);
                 iStorage->QuotaKB(val);
@@ -136,9 +164,10 @@ namespace Plugin {
                 iStorage->UsedKB(val);
                 response.Apps.UsedKB = Core::ToString(val);
                   
-                errorCode = result->Persistent(iStorage);
-                if (errorCode != Core::ERROR_NONE) {
-                    ERROR("LISAJsonRpc Persistent() result: ", errorCode);
+                errorCode = storagePayload->Persistent(iStorageRaw);
+                iStorage.reset(iStorageRaw);
+                if (errorCode != Core::ERROR_NONE || (! iStorage)) {
+                    ERROR("Persistent result: ", errorCode, " iStorage: ", iStorage.get());
                     return errorCode;
                 }
 
@@ -149,7 +178,7 @@ namespace Plugin {
                 iStorage->UsedKB(val);
                 response.Persistent.UsedKB = Core::ToString(val);
                     
-                INFO("LISAJsonRpc GetStorageDetails finished with code: ", errorCode);
+                INFO("GetStorageDetails finished with code: ", errorCode);
                 return errorCode;
             });
 
@@ -157,7 +186,7 @@ namespace Plugin {
             [destination, this](const SetAuxMetadataParamsData& params) -> uint32_t 
             {
                 uint32_t errorCode = Core::ERROR_NONE;
-                INFO("LISAJsonRpc SetAuxMetadata");
+                INFO("SetAuxMetadata");
 
                 errorCode = destination->SetAuxMetadata(
                     params.Type.Value(),
@@ -165,7 +194,7 @@ namespace Plugin {
                     params.Version.Value(), 
                     params.AuxMetadata.Value());
 
-                INFO("LISAJsonRpc SetAuxMetadata finished with code: ", errorCode);
+                INFO("SetAuxMetadata finished with code: ", errorCode);
                 return errorCode;
             });
 
@@ -178,7 +207,7 @@ namespace Plugin {
             [destination, this](const GetStorageDetailsParamsInfo& params, Core::JSON::String& response) -> uint32_t 
             {
                 uint32_t errorCode = Core::ERROR_NONE;
-                INFO("LISAJsonRpc GetMetadata");
+                INFO("GetMetadata");
 
                 std::string result;
                 errorCode = destination->GetMetadata(
@@ -187,7 +216,7 @@ namespace Plugin {
                     params.Version.Value(), result);
                 response = result;
 
-                INFO("LISAJsonRpc GetMetadata finished with code: ", errorCode);
+                INFO("GetMetadata finished with code: ", errorCode);
                 return errorCode;
             });
 
@@ -195,12 +224,12 @@ namespace Plugin {
             [destination, this](const CancelParamsInfo& params) -> uint32_t 
             {
                 uint32_t errorCode = Core::ERROR_NONE;
-                INFO("LISAJsonRpc Cancel");
+                INFO("Cancel");
 
                 errorCode = destination->Cancel(
                     params.Handle.Value());
 
-                INFO("LISAJsonRpc Cancel finished with code: ", errorCode);
+                INFO("Cancel finished with code: ", errorCode);
                 return errorCode;
             });
 
@@ -211,77 +240,83 @@ namespace Plugin {
             [destination, this](const CancelParamsInfo& params, Core::JSON::DecUInt64& response) -> uint32_t 
             {
                 uint32_t errorCode = Core::ERROR_NONE;
-                INFO("LISAJsonRpc GetProgress");
+                INFO("GetProgress");
 
                 uint32_t result;
                 errorCode = destination->GetProgress(
                     params.Handle.Value(), result);
                 response = result;
 
-                INFO("LISAJsonRpc GetProgress finished with code: ", errorCode);
+                INFO("GetProgress finished with code: ", errorCode);
                 return errorCode;
             });
 
         module.Register<GetListParamsData,AppslistpayloadData>(_T("getList"), 
             [destination, this](const GetListParamsData& params, AppslistpayloadData& response) -> uint32_t 
             {
+               using namespace Exchange;
+
+                INFO("GetList");
+
                 uint32_t errorCode = Core::ERROR_NONE;
-                Exchange::ILISA::IAppsPayload* result = nullptr;
-                Exchange::ILISA::IApp::IIterator* apps = nullptr;
-                Exchange::ILISA::IAppVersion::IIterator* versions = nullptr;
-                Exchange::ILISA::IApp* iApp = nullptr;
-                Exchange::ILISA::IAppVersion* iVersion = nullptr;
-                bool hasNext = false;
-                std::string val;
-
-                INFO("LISAJsonRpc GetList");
-
+                ILISA::IAppsPayload* appListRaw = nullptr;
                 errorCode = destination->GetList(
                     params.Type.Value(),
                     params.Id.Value(), 
                     params.Version.Value(), 
                     params.AppName.Value(), 
-                    params.Category.Value(), result);
+                    params.Category.Value(), appListRaw);
+                auto appList = makeUniqueRpc(appListRaw);
 
-                if (errorCode != Core::ERROR_NONE) {
-                    ERROR("LISAJsonRpc GetList() result: ", errorCode);
+                if (errorCode != Core::ERROR_NONE || (! appList)) {
+                    ERROR("GetList() result: ", errorCode);
                     return errorCode;
                 }
                 
-                errorCode = result->Apps(apps);
-                if (errorCode != Core::ERROR_NONE) {
-                    ERROR("LISAJsonRpc Apps() result: ", errorCode);
+                ILISA::IApp::IIterator* appsRaw = nullptr;
+                errorCode = appList->Apps(appsRaw);
+                auto apps = makeUniqueRpc(appsRaw);
+                if (errorCode != Core::ERROR_NONE || (! apps)) {
+                    ERROR("Apps() result: ", errorCode, " apps: ", apps.get());
                     return errorCode;
                 }
                 
                 // Loop through apps in the response
+                bool hasNext = false;
                 while ((errorCode = apps->Next(hasNext)) == Core::ERROR_NONE && hasNext)
                 {
-                    errorCode = apps->Current(iApp);
-                    if (errorCode != Core::ERROR_NONE) {
-                        ERROR("LISAJsonRpc Current() result: ", errorCode);
+                    ILISA::IApp* iAppRaw = nullptr;
+                    errorCode = apps->Current(iAppRaw);
+                    auto iApp = makeUniqueRpc(iAppRaw);
+                    if (errorCode != Core::ERROR_NONE || (! iApp)) {
+                        ERROR("Current() result: ", errorCode, " iApp: ", iApp.get());
                         return errorCode;
                     }
                     
                     AppslistpayloadData::AppData app;
+                    std::string val;
                     iApp->Id(val);
                     app.Id = Core::ToString(val);
-                    INFO("LISAJsonRpc GetList app: ", val);
+                    INFO("GetList app: ", val);
                     iApp->Type(val);
                     app.Type = Core::ToString(val);
-                    
-                    errorCode = iApp->Installed(versions);
-                    if (errorCode != Core::ERROR_NONE) {
-                       ERROR("LISAJsonRpc Installed() result: ", errorCode);
+
+                    ILISA::IAppVersion::IIterator* versionsRaw = nullptr;
+                    errorCode = iApp->Installed(versionsRaw);
+                    auto versions = makeUniqueRpc(versionsRaw);
+                    if (errorCode != Core::ERROR_NONE || (! versions)) {
+                       ERROR("Installed() result: ", errorCode, " versions: ", versions.get());
                        return errorCode;
                     }
                     
                     // Loop through versions of a single app
                     while ((errorCode = versions->Next(hasNext)) == Core::ERROR_NONE && hasNext)
                     {
-                        errorCode = versions->Current(iVersion);
-                        if (errorCode != Core::ERROR_NONE) {
-                            ERROR("LISAJsonRpc Current() result: ", errorCode);
+                        ILISA::IAppVersion* iVersionRaw = nullptr;
+                        errorCode = versions->Current(iVersionRaw);
+                        auto iVersion = makeUniqueRpc(iVersionRaw);
+                        if (errorCode != Core::ERROR_NONE || (! iVersion)) {
+                            ERROR("Current() result: ", errorCode, " iVersion: ", iVersion.get());
                             return errorCode;
                         }
 
@@ -296,7 +331,8 @@ namespace Plugin {
                     }
                     response.Apps.Add(app);
                 }
-                INFO("LISAJsonRpc GetList finished with code: ", errorCode);
+
+                INFO("GetList finished with code: ", errorCode);
                 return errorCode;
             });
     }
