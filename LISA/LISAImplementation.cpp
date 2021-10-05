@@ -144,12 +144,14 @@ public:
         uint32_t Apps(ILISA::IStorage*& storage) const override
         {
             storage = (Core::Service<StorageImpl>::Create<ILISA::IStorage>(_appPath, _appQuota, _appUsedKB));
+            ASSERT(storage);
             return Core::ERROR_NONE;
         }
 
         uint32_t Persistent(ILISA::IStorage*& storage) const override
         {
             storage = (Core::Service<StorageImpl>::Create<ILISA::IStorage>( _persistentPath, _persistentQuota, _persistentUsedKB));
+            ASSERT(storage);
             return Core::ERROR_NONE;
         }
     private:
@@ -510,6 +512,7 @@ public:
         uint32_t Installed(ILISA::IAppVersion::IIterator*& versions) const override
         {
             versions = Core::Service<AppVersionImpl::IteratorImpl>::Create<ILISA::IAppVersion::IIterator>(_versions);
+            ASSERT(versions);
             return Core::ERROR_NONE;
         }
 
@@ -554,6 +557,7 @@ public:
         uint32_t Apps(ILISA::IApp::IIterator*& apps) const override
         {
             apps = (Core::Service<AppImpl::IteratorImpl>::Create<ILISA::IApp::IIterator>(_apps));
+            ASSERT(apps);
             return Core::ERROR_NONE;
         }
     private:
@@ -574,7 +578,7 @@ public:
         const std::string& category,
         IAppsPayload*& result) const override
     {
-        INFO("");
+        INFO(" ");
 
         std::vector<LISA::DataStorage::AppDetails> appsDetailsList{};
         auto rc = executor.GetAppDetailsList(type, id, version, appName, category, appsDetailsList);

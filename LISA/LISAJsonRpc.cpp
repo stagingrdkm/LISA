@@ -134,7 +134,7 @@ namespace Plugin {
             {
                 uint32_t errorCode = Core::ERROR_NONE;
 
-                INFO("");
+                INFO(" ");
 
                 Exchange::ILISA::IStoragePayload* storagePayloadRaw = nullptr;
                 errorCode = destination->GetStorageDetails(
@@ -143,16 +143,16 @@ namespace Plugin {
                     params.Version.Value(), storagePayloadRaw);
                 auto storagePayload = makeUniqueRpc(storagePayloadRaw);
 
-                if (errorCode != Core::ERROR_NONE || (! storagePayload)) {
-                   ERROR("result: ", errorCode, " storagePayload: ", storagePayload.get());
+                if (errorCode != Core::ERROR_NONE) {
+                   ERROR("result: ", errorCode);
                    return errorCode;
                 }
                 
                 Exchange::ILISA::IStorage* iStorageRaw = nullptr;
                 errorCode = storagePayload->Apps(iStorageRaw);
                 auto iStorage = makeUniqueRpc(iStorageRaw);
-                if (errorCode != Core::ERROR_NONE || (! iStorage)) {
-                    ERROR("Apps() result: ", errorCode, " iStorage: ", iStorage.get());
+                if (errorCode != Core::ERROR_NONE) {
+                    ERROR("Apps() result: ", errorCode);
                     return errorCode;
                 }
 
@@ -166,8 +166,8 @@ namespace Plugin {
                   
                 errorCode = storagePayload->Persistent(iStorageRaw);
                 iStorage.reset(iStorageRaw);
-                if (errorCode != Core::ERROR_NONE || (! iStorage)) {
-                    ERROR("Persistent result: ", errorCode, " iStorage: ", iStorage.get());
+                if (errorCode != Core::ERROR_NONE) {
+                    ERROR("Persistent result: ");
                     return errorCode;
                 }
 
@@ -268,7 +268,7 @@ namespace Plugin {
                     params.Category.Value(), appListRaw);
                 auto appList = makeUniqueRpc(appListRaw);
 
-                if (errorCode != Core::ERROR_NONE || (! appList)) {
+                if (errorCode != Core::ERROR_NONE) {
                     ERROR("GetList() result: ", errorCode);
                     return errorCode;
                 }
@@ -276,8 +276,8 @@ namespace Plugin {
                 ILISA::IApp::IIterator* appsRaw = nullptr;
                 errorCode = appList->Apps(appsRaw);
                 auto apps = makeUniqueRpc(appsRaw);
-                if (errorCode != Core::ERROR_NONE || (! apps)) {
-                    ERROR("Apps() result: ", errorCode, " apps: ", apps.get());
+                if (errorCode != Core::ERROR_NONE) {
+                    ERROR("Apps() result: ", errorCode);
                     return errorCode;
                 }
                 
@@ -288,8 +288,8 @@ namespace Plugin {
                     ILISA::IApp* iAppRaw = nullptr;
                     errorCode = apps->Current(iAppRaw);
                     auto iApp = makeUniqueRpc(iAppRaw);
-                    if (errorCode != Core::ERROR_NONE || (! iApp)) {
-                        ERROR("Current() result: ", errorCode, " iApp: ", iApp.get());
+                    if (errorCode != Core::ERROR_NONE) {
+                        ERROR("Current() result: ", errorCode);
                         return errorCode;
                     }
                     
@@ -304,8 +304,8 @@ namespace Plugin {
                     ILISA::IAppVersion::IIterator* versionsRaw = nullptr;
                     errorCode = iApp->Installed(versionsRaw);
                     auto versions = makeUniqueRpc(versionsRaw);
-                    if (errorCode != Core::ERROR_NONE || (! versions)) {
-                       ERROR("Installed() result: ", errorCode, " versions: ", versions.get());
+                    if (errorCode != Core::ERROR_NONE) {
+                       ERROR("Installed() result: ", errorCode);
                        return errorCode;
                     }
                     
@@ -315,8 +315,8 @@ namespace Plugin {
                         ILISA::IAppVersion* iVersionRaw = nullptr;
                         errorCode = versions->Current(iVersionRaw);
                         auto iVersion = makeUniqueRpc(iVersionRaw);
-                        if (errorCode != Core::ERROR_NONE || (! iVersion)) {
-                            ERROR("Current() result: ", errorCode, " iVersion: ", iVersion.get());
+                        if (errorCode != Core::ERROR_NONE) {
+                            ERROR("Current() result: ", errorCode);
                             return errorCode;
                         }
 
