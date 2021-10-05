@@ -24,6 +24,7 @@
 
 #include <interfaces/ILISA.h>
 #include <string>
+#include <memory>
 #include <mutex>
 #include <map>
 
@@ -143,12 +144,14 @@ public:
         uint32_t Apps(ILISA::IStorage*& storage) const override
         {
             storage = (Core::Service<StorageImpl>::Create<ILISA::IStorage>(_appPath, _appQuota, _appUsedKB));
+            ASSERT(storage);
             return Core::ERROR_NONE;
         }
 
         uint32_t Persistent(ILISA::IStorage*& storage) const override
         {
             storage = (Core::Service<StorageImpl>::Create<ILISA::IStorage>( _persistentPath, _persistentQuota, _persistentUsedKB));
+            ASSERT(storage);
             return Core::ERROR_NONE;
         }
     private:
@@ -509,6 +512,7 @@ public:
         uint32_t Installed(ILISA::IAppVersion::IIterator*& versions) const override
         {
             versions = Core::Service<AppVersionImpl::IteratorImpl>::Create<ILISA::IAppVersion::IIterator>(_versions);
+            ASSERT(versions);
             return Core::ERROR_NONE;
         }
 
@@ -553,6 +557,7 @@ public:
         uint32_t Apps(ILISA::IApp::IIterator*& apps) const override
         {
             apps = (Core::Service<AppImpl::IteratorImpl>::Create<ILISA::IApp::IIterator>(_apps));
+            ASSERT(apps);
             return Core::ERROR_NONE;
         }
     private:
@@ -573,24 +578,35 @@ public:
         const std::string& category,
         IAppsPayload*& result) const override
     {
-        INFO("");
+        INFO(" ");
 
         std::vector<LISA::DataStorage::AppDetails> appsDetailsList{};
         auto rc = executor.GetAppDetailsList(type, id, version, appName, category, appsDetailsList);
-        std::map<std::pair<std::string, std::string>, std::list<AppVersionImpl*>> appsDet;
-        for(const auto& app: appsDetailsList)
-        {
-            appsDet[{app.type, app.id}].push_back(Core::Service<AppVersionImpl>::Create<AppVersionImpl>(app.version, app.appName, app.category, app.url));
+        if (rc == Core::ERROR_NONE) {
+
+            std::map<std::pair<std::string, std::string>, std::list<AppVersionImpl*>> appsDet;
+            for(const auto& app: appsDetailsList)
+            {
+                appsDet[{app.type, app.id}].push_back(Core::Service<AppVersionImpl>::Create<AppVersionImpl>(app.version, app.appName, app.category, app.url));
+            }
+            std::list<AppImpl*> apps;
+            for(const auto& app: appsDet)
+            {
+                auto appVersions = app.second;
+                apps.push_back(Core::Service<AppImpl>::Create<AppImpl>(app.first.first, app.first.second, appVersions));
+                for(auto appVersion : appVersions) {
+                    appVersion->Release();
+                }
+            }
+
+            // Create apps payload which will be returned as the result
+            ILISA::IAppsPayload* appsPayload = Core::Service<AppsPayloadImpl>::Create<ILISA::IAppsPayload>(apps);
+            result = appsPayload;
+
+            for (auto app : apps) {
+                app->Release();
+            }
         }
-        std::list<AppImpl*> apps;
-        for(const auto& app: appsDet)
-        {
-            apps.push_back(Core::Service<AppImpl>::Create<AppImpl>(app.first.first, app.first.second, app.second));
-        }
-        
-        // Create apps payload which will be returned as the result
-        ILISA::IAppsPayload* appsPayload = Core::Service<AppsPayloadImpl>::Create<ILISA::IAppsPayload>(apps);
-        result = appsPayload;
         return rc;
     }
 
