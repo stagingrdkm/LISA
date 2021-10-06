@@ -24,6 +24,7 @@
 #include "Downloader.h"
 #include "Filesystem.h"
 #include "SqlDataStorage.h"
+#include "AuthModule/Auth.h"
 
 #include <array>
 #include <cassert>
@@ -32,6 +33,8 @@
 namespace WPEFramework {
 namespace Plugin {
 namespace LISA {
+
+extern "C" AuthMethod getAuthenticationMethod(const char* appType, const char* id, const char* url);
 
 namespace // anonymous
 {
@@ -311,7 +314,11 @@ void Executor::doInstall(std::string type,
 {
     INFO("url=", url, " appName=", appName, " cat=", category);
 
-    // TODO check authentication method
+    auto authMethod = getAuthenticationMethod(type.c_str(), id.c_str(), url.c_str());
+    if(NONE != authMethod) {
+        std::string message = std::string{} + "Authentication method unsupported: " + std::to_string(authMethod);
+        throw std::runtime_error(message);
+    }
 
     auto appSubPath = Filesystem::createAppPath(type, id, version);
     INFO("appSubPath: ", appSubPath);
