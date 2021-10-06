@@ -188,15 +188,15 @@ uint32_t Executor::GetStorageDetails(const std::string& type,
             // In Stage 1 there will be only one entry here
             for(const auto& i: appsPaths)
             {
-                appUsedKB += fs::getDirectorySpace(i);
                 details.appPath = fs::getAppsDir() + i;
+                appUsedKB += fs::getDirectorySpace(details.appPath);
             }
             std::vector<std::string> dataPaths = dataBase->GetDataPaths(type, id);
             long persistentUsedKB{};
             for(const auto& i: dataPaths)
             {
-                persistentUsedKB += fs::getDirectorySpace(i);
                 details.persistentPath = fs::getAppsStorageDir() + i;
+                persistentUsedKB += fs::getDirectorySpace(details.persistentPath);
             }
             details.appUsedKB = std::to_string(appUsedKB / 1024);
             details.persistentUsedKB = std::to_string(persistentUsedKB / 1024);
