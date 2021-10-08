@@ -123,6 +123,64 @@ namespace { // anonymous
         DeleteFromApps(type, id);
     }
 
+    void SqlDataStorage::SetMetadata(const std::string& type,
+                         const std::string& id,
+                         const std::string& version,
+                         const std::string& key,
+                         const std::string& value)
+    {
+        string query = "INSERT OR REPLACE INTO metadata"
+                            "(app_idx, meta_key, meta_value) "
+                            "VALUES("
+                            "(SELECT installed_apps.idx FROM installed_apps INNER JOIN apps ON apps.idx = installed_apps.app_idx WHERE type = ?1 AND app_id = ?2 AND version = ?3),"
+                            "?4,"
+                            "?5);";
+
+        sqlite3_stmt* stmt;
+        sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
+
+        sqlite3_bind_text(stmt, 1, type.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, id.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 3, version.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 4, key.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 5, value.c_str(), -1, SQLITE_TRANSIENT);
+        ExecuteSqlStep(stmt);
+        sqlite3_finalize(stmt);
+    }
+
+    std::vector<std::pair<std::string, std::string> > SqlDataStorage::GetMetadata(const std::string& type,
+                                                                                  const std::string& id,
+                                                                                  const std::string& version)
+    {
+        INFO(" ");
+        string query = "SELECT meta_key, meta_value FROM metadata "
+                       "INNER JOIN installed_apps ON installed_apps.idx = metadata.app_idx "
+                       "INNER JOIN apps ON apps.idx = installed_apps.app_idx "
+                       "WHERE type = ?1 AND app_id = ?2 AND version = ?3";
+        sqlite3_stmt* stmt;
+        sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
+
+        sqlite3_bind_text(stmt, 1, type.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, id.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 3, version.c_str(), -1, SQLITE_TRANSIENT);
+
+        std::vector<std::pair<std::string, std::string> > metadata;
+        int rc{};
+        while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+            std::pair<std::string, std::string> keyValue{
+                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)),
+                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1))
+            };
+            metadata.push_back(keyValue);
+        }
+        if (rc != SQLITE_DONE) {
+            throw SqlDataStorageError(std::string{"sqlite error: "} + sqlite3_errmsg(sqlite));
+        }
+
+        sqlite3_finalize(stmt);
+        return metadata;
+    }
+
     void SqlDataStorage::InitDB()
     {
         INFO("Initializing database");
@@ -167,6 +225,15 @@ namespace { // anonymous
                                               "metadata TEXT,"
                                               "FOREIGN KEY(app_idx) REFERENCES apps(idx)"
                                               ");");
+
+        ExecuteCommand("CREATE TABLE IF NOT EXISTS metadata("
+	                        "idx INTEGER PRIMARY KEY,"
+                            "app_idx TEXT NOT NULL,"
+                            "meta_key TEXT NOT NULL,"
+                            "meta_value TEXT NOT NULL,"
+                            "FOREIGN KEY(app_idx) REFERENCES installed_apps(idx),"
+                            "UNIQUE(app_idx, meta_key)"
+                            ");");
     }
 
     void SqlDataStorage::EnableForeignKeys() const
@@ -207,6 +274,7 @@ namespace { // anonymous
             ERROR("database integrity check failed, dropping tables");
             ExecuteCommand("DROP TABLE apps;");
             ExecuteCommand("DROP TABLE installed_apps;");
+            ExecuteCommand("DROP TABLE metadata;");
         }
     }
 

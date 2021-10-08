@@ -224,6 +224,35 @@ uint32_t Executor::GetAppDetailsList(const std::string& type,
     return ERROR_NONE;
 }
 
+uint32_t Executor::SetMetadata(const std::string& type,
+                         const std::string& id,
+                         const std::string& version,
+                         const std::string& key,
+                         const std::string& value)
+{
+    try {
+        dataBase->SetMetadata(type, id, version, key, value);
+    } catch (std::exception& error) {
+        ERROR("Unable to set metadata: ", error.what());
+        return Core::ERROR_GENERAL;
+    }
+    return ERROR_NONE;
+}
+
+uint32_t Executor::GetMetadata(const std::string& type,
+                         const std::string& id,
+                         const std::string& version,
+                         std::vector<std::pair<std::string, std::string> >& metadataList) const
+{
+    try {
+        metadataList = dataBase->GetMetadata(type, id, version);
+    } catch (std::exception& error) {
+        ERROR("Unable to get metadata: ", error.what());
+        return Core::ERROR_GENERAL;
+    }
+    return ERROR_NONE;
+}
+
 void Executor::handleDirectories()
 {
     Filesystem::createDirectory(Filesystem::getAppsDir() + Filesystem::LISA_EPOCH);

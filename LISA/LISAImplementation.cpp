@@ -95,7 +95,7 @@ public:
         {
         }
 
-        ~StorageImpl() override 
+        ~StorageImpl() override
         {
         }
 
@@ -103,12 +103,12 @@ public:
             path = _path;
             return Core::ERROR_NONE;
         }
-        
+
         uint32_t QuotaKB(string& quota) const override {
             quota = _quota;
             return Core::ERROR_NONE;
         }
-            
+
         uint32_t UsedKB(string& usedKB) const override {
             usedKB = _usedKB;
             return Core::ERROR_NONE;
@@ -137,7 +137,7 @@ public:
         {
         }
 
-        ~StoragePayloadImpl() override 
+        ~StoragePayloadImpl() override
         {
         }
 
@@ -168,10 +168,216 @@ public:
         END_INTERFACE_MAP
     }; // StoragePayload
 
+    class KeyValueImpl : public ILISA::IKeyValue
+    {
+    public:
+        KeyValueImpl() = delete;
+        KeyValueImpl(const KeyValueImpl&) = delete;
+        KeyValueImpl& operator=(const KeyValueImpl&) = delete;
+
+        KeyValueImpl(const std::string key, const std::string value)
+            : _key(key), _value(value)
+        {
+        }
+
+        ~KeyValueImpl() override
+        {
+        }
+
+        uint32_t Key(std::string& key) const override
+        {
+            key = _key;
+            return Core::ERROR_NONE;
+        }
+
+        uint32_t Value(std::string& value) const override
+        {
+            value = _value;
+            return Core::ERROR_NONE;
+        }
+
+    private:
+        std::string _key;
+        std::string _value;
+
+    public:
+        BEGIN_INTERFACE_MAP(KeyValueImpl)
+            INTERFACE_ENTRY(Exchange::ILISA::IKeyValue)
+        END_INTERFACE_MAP
+    }; // class KeyValueImpl
+
+    class KeyValueIteratorImpl : public ILISA::IKeyValueIterator {
+        public:
+            KeyValueIteratorImpl() = delete;
+            KeyValueIteratorImpl(const KeyValueIteratorImpl&) = delete;
+            KeyValueIteratorImpl& operator=(const KeyValueIteratorImpl&) = delete;
+
+            KeyValueIteratorImpl(const std::list<KeyValueImpl*>& container)
+            {
+                std::list<KeyValueImpl*>::const_iterator index = container.begin();
+                while (index != container.end()) {
+                    ILISA::IKeyValue* element = (*index);
+                    element->AddRef();
+                    _list.push_back(element);
+                    index++;
+                }
+            }
+
+            ~KeyValueIteratorImpl() override
+            {
+                while (_list.size() != 0) {
+                    _list.front()->Release();
+                    _list.pop_front();
+                }
+            }
+
+        public:
+            uint32_t Reset() override
+            {
+                _index = 0;
+                return Core::ERROR_NONE;
+            }
+
+            bool IsValid() const
+            {
+                return ((_index != 0) && (_index <= _list.size()));
+            }
+
+            uint32_t IsValid(bool& isValid) const override
+            {
+                isValid = IsValid();
+                return Core::ERROR_NONE;
+            }
+
+            uint32_t Next(bool& hasNext) override
+            {
+                if (_index == 0) {
+                    _index = 1;
+                    _iterator = _list.begin();
+                } else if (_index <= _list.size()) {
+                    _index++;
+                    _iterator++;
+                }
+                hasNext = IsValid();
+                return Core::ERROR_NONE;
+            }
+
+            uint32_t Current(ILISA::IKeyValue*& keyValue) const override
+            {
+                ASSERT(IsValid() == true);
+                ILISA::IKeyValue* result = nullptr;
+                result = (*_iterator);
+                ASSERT(result != nullptr);
+                result->AddRef();
+                keyValue = result;
+                return Core::ERROR_NONE;
+            }
+
+        private:
+            uint32_t _index = 0;
+            std::list<ILISA::IKeyValue*> _list;
+            std::list<ILISA::IKeyValue*>::iterator _iterator;
+
+        public:
+            BEGIN_INTERFACE_MAP(KeyValueIteratorImpl)
+                INTERFACE_ENTRY(Exchange::ILISA::IKeyValueIterator)
+            END_INTERFACE_MAP
+    }; // class KeyValueIteratorImpl
+
+    class MetadataPayloadImpl : public ILISA::IMetadataPayload
+    {
+    public:
+        MetadataPayloadImpl() = delete;
+        MetadataPayloadImpl(const MetadataPayloadImpl&) = delete;
+        MetadataPayloadImpl& operator=(const MetadataPayloadImpl&) = delete;
+
+        MetadataPayloadImpl(const std::string appName, const std::string category, const std::string url,
+        const std::list<KeyValueImpl*>& resources, const std::list<KeyValueImpl*>& auxMetadata)
+        {
+            _appName = appName;
+            _category = category;
+            _url = url;
+
+            {
+                std::list<KeyValueImpl*>::const_iterator index = resources.begin();
+                while (index != resources.end()) {
+                    KeyValueImpl* element = (*index);
+                    element->AddRef();
+                    _resources.push_back(element);
+                    index++;
+                }
+            }
+            {
+                std::list<KeyValueImpl*>::const_iterator index = auxMetadata.begin();
+                while (index != auxMetadata.end()) {
+                    KeyValueImpl* element = (*index);
+                    element->AddRef();
+                    _auxMetadata.push_back(element);
+                    index++;
+                }
+            }
+        }
+
+        ~MetadataPayloadImpl() override
+        {
+            while (_resources.size() != 0) {
+                _resources.front()->Release();
+                _resources.pop_front();
+            }
+            while (_auxMetadata.size() != 0) {
+                _auxMetadata.front()->Release();
+                _auxMetadata.pop_front();
+            }
+        }
+
+        uint32_t AppName(string& appName /* @out */) const override
+        {
+            appName = _appName;
+            return Core::ERROR_NONE;
+        }
+
+        uint32_t Category(string& category /* @out */) const override
+        {
+            category = _category;
+            return Core::ERROR_NONE;
+        }
+
+        uint32_t Url(string& url /* @out */) const override
+        {
+            url = _url;
+            return Core::ERROR_NONE;
+        }
+
+        uint32_t Resources(ILISA::IKeyValueIterator*& resources) const override
+        {
+            resources = (Core::Service<KeyValueIteratorImpl>::Create<ILISA::IKeyValueIterator>(_resources));
+            return Core::ERROR_NONE;
+        }
+
+        uint32_t AuxMetadata(ILISA::IKeyValueIterator*& auxMetadata /* @out */) const override
+        {
+            auxMetadata = (Core::Service<KeyValueIteratorImpl>::Create<ILISA::IKeyValueIterator>(_auxMetadata));
+            return Core::ERROR_NONE;
+        }
+
+    private:
+        std::string _appName;
+        std::string _category;
+        std::string _url;
+        std::list<KeyValueImpl*> _resources;
+        std::list<KeyValueImpl*> _auxMetadata;
+
+    public:
+        BEGIN_INTERFACE_MAP(MetadataPayloadImpl)
+            INTERFACE_ENTRY(Exchange::ILISA::IMetadataPayload)
+        END_INTERFACE_MAP
+    }; // MetadataPayloadImpl
+
     uint32_t SetAuxMetadata(const std::string& type,
             const std::string& id,
             const std::string& version,
-            const std::string& auxMetadata) override
+            const std::string& key,
+            const std::string& value) override
     {
         return Core::ERROR_NONE;
     }
@@ -179,9 +385,33 @@ public:
     uint32_t GetMetadata(const std::string& type,
             const std::string& id,
             const std::string& version,
-            std::string& auxMetadata) override
+            ILISA::IMetadataPayload*& result) override
     {
-        auxMetadata = "metadata";
+        // Create resources
+        std::list<KeyValueImpl*> resources;
+        KeyValueImpl* res1 = Core::Service<KeyValueImpl>::Create<KeyValueImpl>(
+            Core::ToString("res1"), Core::ToString("value1"));
+        KeyValueImpl* res2 = Core::Service<KeyValueImpl>::Create<KeyValueImpl>(
+            Core::ToString("res2"), Core::ToString("value2"));
+
+        resources.push_back(res1);
+        resources.push_back(res2);
+
+        // Create auxMetadata
+        std::list<KeyValueImpl*> auxMetadata;
+        KeyValueImpl* aux1 = Core::Service<KeyValueImpl>::Create<KeyValueImpl>(
+            Core::ToString("aux1"), Core::ToString("aux_value1"));
+        KeyValueImpl* aux2 = Core::Service<KeyValueImpl>::Create<KeyValueImpl>(
+            Core::ToString("aux2"), Core::ToString("aux_value2"));
+
+        auxMetadata.push_back(aux1);
+        auxMetadata.push_back(aux2);
+
+        ILISA::IMetadataPayload* metadataPayload = Core::Service<MetadataPayloadImpl>::Create<ILISA::IMetadataPayload>(
+            Core::ToString("sampleAppName"), Core::ToString("sampleCategory"), Core::ToString("sampleUrl"),
+            resources, auxMetadata
+        );
+        result = metadataPayload;
         return Core::ERROR_NONE;
     }
 
@@ -259,7 +489,7 @@ public:
     END_INTERFACE_MAP
 
 public:
-    class AppVersionImpl : public ILISA::IAppVersion 
+    class AppVersionImpl : public ILISA::IAppVersion
     {
     public:
         class IteratorImpl : public ILISA::IAppVersion::IIterator {
@@ -278,7 +508,7 @@ public:
                     index++;
                 }
             }
-            
+
             ~IteratorImpl() override
             {
                 while (_list.size() != 0) {
@@ -328,7 +558,7 @@ public:
                 version = result;
                 return Core::ERROR_NONE;
             }
-        
+
         public:
             BEGIN_INTERFACE_MAP(AppVersionImpl::IteratorImpl)
                 INTERFACE_ENTRY(Exchange::ILISA::IAppVersion::IIterator)
@@ -350,7 +580,7 @@ public:
         {
         }
 
-        ~AppVersionImpl() override 
+        ~AppVersionImpl() override
         {
         }
 
@@ -360,7 +590,7 @@ public:
             return Core::ERROR_NONE;
         }
 
-        uint32_t AppName(std::string& appName) const override 
+        uint32_t AppName(std::string& appName) const override
         {
             appName = _appName;
             return Core::ERROR_NONE;
@@ -387,11 +617,11 @@ public:
     public:
         BEGIN_INTERFACE_MAP(AppVersionImpl)
             INTERFACE_ENTRY(Exchange::ILISA::IAppVersion)
-        END_INTERFACE_MAP    
+        END_INTERFACE_MAP
     }; // class AppVersionImpl
 
 public:
-    class AppImpl : public ILISA::IApp 
+    class AppImpl : public ILISA::IApp
     {
     public:
         class IteratorImpl : public ILISA::IApp::IIterator {
@@ -410,7 +640,7 @@ public:
                     index++;
                 }
             }
-            
+
             ~IteratorImpl() override
             {
                 while (_list.size() != 0) {
@@ -436,7 +666,7 @@ public:
                 isValid = IsValid();
                 return Core::ERROR_NONE;
             }
-            
+
             uint32_t Next(bool& hasNext) override
             {
                 if (_index == 0) {
@@ -449,7 +679,7 @@ public:
                 hasNext = IsValid();
                 return Core::ERROR_NONE;
             }
-  
+
             uint32_t Current(ILISA::IApp*& app) const override
             {
                 ASSERT(IsValid() == true);
@@ -457,10 +687,10 @@ public:
                 result = (*_iterator);
                 ASSERT(result != nullptr);
                 result->AddRef();
-                app = result;                
+                app = result;
                 return Core::ERROR_NONE;
             }
-            
+
         public:
             BEGIN_INTERFACE_MAP(AppImpl::IteratorImpl)
                 INTERFACE_ENTRY(Exchange::ILISA::IApp::IIterator)
@@ -489,26 +719,26 @@ public:
             }
         }
 
-        ~AppImpl() override 
+        ~AppImpl() override
         {
             while (_versions.size() != 0) {
                 _versions.front()->Release();
                 _versions.pop_front();
             }
         }
-           
-        uint32_t Type(string& type) const override 
-        { 
+
+        uint32_t Type(string& type) const override
+        {
             type = _type;
             return Core::ERROR_NONE;
         }
 
-        uint32_t Id(string& id) const override 
+        uint32_t Id(string& id) const override
         {
             id = _id;
             return Core::ERROR_NONE;
         }
-        
+
         uint32_t Installed(ILISA::IAppVersion::IIterator*& versions) const override
         {
             versions = Core::Service<AppVersionImpl::IteratorImpl>::Create<ILISA::IAppVersion::IIterator>(_versions);
@@ -543,10 +773,10 @@ public:
                 element->AddRef();
                 _apps.push_back(element);
                 index++;
-            }    
+            }
         }
 
-        ~AppsPayloadImpl() override 
+        ~AppsPayloadImpl() override
         {
             while (_apps.size() != 0) {
                 _apps.front()->Release();
@@ -568,7 +798,7 @@ public:
             INTERFACE_ENTRY(Exchange::ILISA::IAppsPayload)
         END_INTERFACE_MAP
     }; // AppsPayloadImpl
-    
+
     /* @brief List installed applications. */
     uint32_t GetList(
         const std::string& type,
@@ -632,8 +862,8 @@ public:
     }
 
 private:
-    LISA::Executor executor{ 
-        [this](std::string handle, LISA::Executor::OperationStatus status, std::string details) 
+    LISA::Executor executor{
+        [this](std::string handle, LISA::Executor::OperationStatus status, std::string details)
         {
             this->onOperationStatus(handle, status, details);
         }

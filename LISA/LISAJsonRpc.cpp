@@ -56,8 +56,8 @@ namespace Plugin {
     {
         ASSERT(destination != nullptr);
 
-        module.Register<InstallParamsData,Core::JSON::String>(_T("install"), 
-            [destination, this](const InstallParamsData& params, Core::JSON::String& response) -> uint32_t 
+        module.Register<InstallParamsData,Core::JSON::String>(_T("install"),
+            [destination, this](const InstallParamsData& params, Core::JSON::String& response) -> uint32_t
             {
                 uint32_t errorCode = Core::ERROR_NONE;
                 INFO("Install");
@@ -65,10 +65,10 @@ namespace Plugin {
                 std::string result;
                 errorCode = destination->Install(
                     params.Type.Value(),
-                    params.Id.Value(), 
+                    params.Id.Value(),
                     params.Version.Value(),
-                    params.Url.Value(), 
-                    params.AppName.Value(), 
+                    params.Url.Value(),
+                    params.AppName.Value(),
                     params.Category.Value(), result);
                 response = result;
 
@@ -76,8 +76,8 @@ namespace Plugin {
                 return errorCode;
             });
 
-        module.Register<UninstallParamsData,Core::JSON::String>(_T("uninstall"), 
-            [destination, this](const UninstallParamsData& params, Core::JSON::String& response) -> uint32_t 
+        module.Register<UninstallParamsData,Core::JSON::String>(_T("uninstall"),
+            [destination, this](const UninstallParamsData& params, Core::JSON::String& response) -> uint32_t
             {
                 uint32_t errorCode = Core::ERROR_NONE;
                 INFO("Uninstall");
@@ -85,8 +85,8 @@ namespace Plugin {
                 std::string result;
                 errorCode = destination->Uninstall(
                     params.Type.Value(),
-                    params.Id.Value(), 
-                    params.Version.Value(), 
+                    params.Id.Value(),
+                    params.Version.Value(),
                     params.UninstallType.Value(), result);
                 response = result;
 
@@ -94,8 +94,8 @@ namespace Plugin {
                 return errorCode;
             });
 
-        module.Register<DownloadParamsData,Core::JSON::String>(_T("download"), 
-            [destination, this](const DownloadParamsData& params, Core::JSON::String& response) -> uint32_t 
+        module.Register<DownloadParamsData,Core::JSON::String>(_T("download"),
+            [destination, this](const DownloadParamsData& params, Core::JSON::String& response) -> uint32_t
             {
                 uint32_t errorCode = Core::ERROR_NONE;
                 INFO("Download");
@@ -103,8 +103,8 @@ namespace Plugin {
                 std::string result;
                 errorCode = destination->Download(
                     params.Type.Value(),
-                    params.Id.Value(), 
-                    params.Version.Value(), 
+                    params.Id.Value(),
+                    params.Version.Value(),
                     params.ResKey.Value(),
                     params.ResUrl.Value(), result);
                 response = result;
@@ -113,24 +113,24 @@ namespace Plugin {
                 return errorCode;
             });
 
-        module.Register<ResetParamsData,void>(_T("reset"), 
-            [destination, this](const ResetParamsData& params) -> uint32_t 
+        module.Register<ResetParamsData,void>(_T("reset"),
+            [destination, this](const ResetParamsData& params) -> uint32_t
             {
                 uint32_t errorCode = Core::ERROR_NONE;
                 INFO("Reset");
 
                 errorCode = destination->Reset(
                     params.Type.Value(),
-                    params.Id.Value(), 
-                    params.Version.Value(), 
+                    params.Id.Value(),
+                    params.Version.Value(),
                     params.ResetType.Value());
 
                 INFO("Reset finished with code: ", errorCode);
                 return errorCode;
             });
 
-        module.Register<GetStorageDetailsParamsInfo,StoragepayloadData>(_T("getStorageDetails"), 
-            [destination, this](const GetStorageDetailsParamsInfo& params, StoragepayloadData& response) -> uint32_t 
+        module.Register<GetStorageDetailsParamsInfo,StoragepayloadData>(_T("getStorageDetails"),
+            [destination, this](const GetStorageDetailsParamsInfo& params, StoragepayloadData& response) -> uint32_t
             {
                 uint32_t errorCode = Core::ERROR_NONE;
 
@@ -139,7 +139,7 @@ namespace Plugin {
                 Exchange::ILISA::IStoragePayload* storagePayloadRaw = nullptr;
                 errorCode = destination->GetStorageDetails(
                     params.Type.Value(),
-                    params.Id.Value(), 
+                    params.Id.Value(),
                     params.Version.Value(), storagePayloadRaw);
                 auto storagePayload = makeUniqueRpc(storagePayloadRaw);
 
@@ -147,7 +147,7 @@ namespace Plugin {
                    ERROR("result: ", errorCode);
                    return errorCode;
                 }
-                
+
                 Exchange::ILISA::IStorage* iStorageRaw = nullptr;
                 errorCode = storagePayload->Apps(iStorageRaw);
                 auto iStorage = makeUniqueRpc(iStorageRaw);
@@ -163,7 +163,7 @@ namespace Plugin {
                 response.Apps.QuotaKB = Core::ToString(val);
                 iStorage->UsedKB(val);
                 response.Apps.UsedKB = Core::ToString(val);
-                  
+
                 errorCode = storagePayload->Persistent(iStorageRaw);
                 iStorage.reset(iStorageRaw);
                 if (errorCode != Core::ERROR_NONE) {
@@ -177,22 +177,23 @@ namespace Plugin {
                 response.Persistent.QuotaKB = Core::ToString(val);
                 iStorage->UsedKB(val);
                 response.Persistent.UsedKB = Core::ToString(val);
-                    
+
                 INFO("GetStorageDetails finished with code: ", errorCode);
                 return errorCode;
             });
 
-        module.Register<SetAuxMetadataParamsData,void>(_T("setAuxMetadata"), 
-            [destination, this](const SetAuxMetadataParamsData& params) -> uint32_t 
+        module.Register<SetAuxMetadataParamsData,void>(_T("setAuxMetadata"),
+            [destination, this](const SetAuxMetadataParamsData& params) -> uint32_t
             {
                 uint32_t errorCode = Core::ERROR_NONE;
                 INFO("SetAuxMetadata");
 
                 errorCode = destination->SetAuxMetadata(
                     params.Type.Value(),
-                    params.Id.Value(), 
-                    params.Version.Value(), 
-                    params.AuxMetadata.Value());
+                    params.Id.Value(),
+                    params.Version.Value(),
+                    params.Key.Value(),
+                    params.Value.Value());
 
                 INFO("SetAuxMetadata finished with code: ", errorCode);
                 return errorCode;
@@ -203,25 +204,91 @@ namespace Plugin {
         // and GetStorageDetails have the same 3 input params and only GetStorageDetailsParamsInfo
         // was generated. Despite there is no GetMetadataParamsInfo we can use the params for
         // GetStorageDetails in it's place.
-        module.Register<GetStorageDetailsParamsInfo,Core::JSON::String>(_T("getMetadata"), 
-            [destination, this](const GetStorageDetailsParamsInfo& params, Core::JSON::String& response) -> uint32_t 
+        module.Register<GetStorageDetailsParamsInfo,MetadatapayloadData>(_T("getMetadata"),
+            [destination, this](const GetStorageDetailsParamsInfo& params, MetadatapayloadData& response) -> uint32_t
             {
-                uint32_t errorCode = Core::ERROR_NONE;
                 INFO("GetMetadata");
+                uint32_t errorCode = Core::ERROR_NONE;
+                Exchange::ILISA::IMetadataPayload* result = nullptr;
+                Exchange::ILISA::IKeyValueIterator* resources = nullptr;
+                Exchange::ILISA::IKeyValueIterator* auxMetadata = nullptr;
+                Exchange::ILISA::IKeyValue* iKeyValue = nullptr;
+                bool hasNext = false;
+                std::string val;
 
-                std::string result;
                 errorCode = destination->GetMetadata(
                     params.Type.Value(),
-                    params.Id.Value(), 
+                    params.Id.Value(),
                     params.Version.Value(), result);
-                response = result;
+
+                if (errorCode != Core::ERROR_NONE) {
+                    ERROR("LISAJsonRpc GetMetadata() result: ", errorCode);
+                    return errorCode;
+                }
+
+                errorCode = result->Resources(resources);
+                if (errorCode != Core::ERROR_NONE) {
+                    ERROR("LISAJsonRpc Resources() result: ", errorCode);
+                    return errorCode;
+                }
+
+                errorCode = result->AuxMetadata(auxMetadata);
+                if (errorCode != Core::ERROR_NONE) {
+                    ERROR("LISAJsonRpc AuxMetadata() result: ", errorCode);
+                    return errorCode;
+                }
+
+                result->AppName(val);
+                response.AppName = Core::ToString(val);
+                result->Category(val);
+                response.Category = Core::ToString(val);
+                result->Url(val);
+                response.Url = Core::ToString(val);
+
+                // Loop through resources in the response
+                while ((errorCode = resources->Next(hasNext)) == Core::ERROR_NONE && hasNext)
+                {
+                    errorCode = resources->Current(iKeyValue);
+                    if (errorCode != Core::ERROR_NONE) {
+                        ERROR("LISAJsonRpc getMetadata Current() result: ", errorCode);
+                        return errorCode;
+                    }
+
+                    KeyvalueInfo resource;
+                    iKeyValue->Key(val);
+                    resource.Key = Core::ToString(val);
+                    INFO("LISAJsonRpc GetMetadata resource key: ", val);
+                    iKeyValue->Value(val);
+                    resource.Value = Core::ToString(val);
+                    INFO("LISAJsonRpc GetMetadata resource value: ", val);
+                    response.Resources.Add(resource);
+                }
+
+                // Loop through aux metadata in the response
+                while ((errorCode = auxMetadata->Next(hasNext)) == Core::ERROR_NONE && hasNext)
+                {
+                    errorCode = auxMetadata->Current(iKeyValue);
+                    if (errorCode != Core::ERROR_NONE) {
+                        ERROR("LISAJsonRpc getMetadata Current() result: ", errorCode);
+                        return errorCode;
+                    }
+
+                    KeyvalueInfo auxMetadata;
+                    iKeyValue->Key(val);
+                    auxMetadata.Key = Core::ToString(val);
+                    INFO("LISAJsonRpc GetMetadata auxMetadata key: ", val);
+                    iKeyValue->Value(val);
+                    auxMetadata.Value = Core::ToString(val);
+                    INFO("LISAJsonRpc GetMetadata auxMetadata value: ", val);
+                    response.AuxMetadata.Add(auxMetadata);
+                }
 
                 INFO("GetMetadata finished with code: ", errorCode);
                 return errorCode;
             });
 
-        module.Register<CancelParamsInfo,void>(_T("cancel"), 
-            [destination, this](const CancelParamsInfo& params) -> uint32_t 
+        module.Register<CancelParamsInfo,void>(_T("cancel"),
+            [destination, this](const CancelParamsInfo& params) -> uint32_t
             {
                 uint32_t errorCode = Core::ERROR_NONE;
                 INFO("Cancel");
@@ -233,11 +300,11 @@ namespace Plugin {
                 return errorCode;
             });
 
-        // CancelParamsInfo is used instead of GetProgressParamsInfo which 
-        // simply wasn't generated. See the comment for getMetadata as this 
+        // CancelParamsInfo is used instead of GetProgressParamsInfo which
+        // simply wasn't generated. See the comment for getMetadata as this
         // is the same case
-        module.Register<CancelParamsInfo,Core::JSON::DecUInt64>(_T("getProgress"), 
-            [destination, this](const CancelParamsInfo& params, Core::JSON::DecUInt64& response) -> uint32_t 
+        module.Register<CancelParamsInfo,Core::JSON::DecUInt64>(_T("getProgress"),
+            [destination, this](const CancelParamsInfo& params, Core::JSON::DecUInt64& response) -> uint32_t
             {
                 uint32_t errorCode = Core::ERROR_NONE;
                 INFO("GetProgress");
@@ -251,8 +318,8 @@ namespace Plugin {
                 return errorCode;
             });
 
-        module.Register<GetListParamsData,AppslistpayloadData>(_T("getList"), 
-            [destination, this](const GetListParamsData& params, AppslistpayloadData& response) -> uint32_t 
+        module.Register<GetListParamsData,AppslistpayloadData>(_T("getList"),
+            [destination, this](const GetListParamsData& params, AppslistpayloadData& response) -> uint32_t
             {
                using namespace Exchange;
 
@@ -262,9 +329,9 @@ namespace Plugin {
                 ILISA::IAppsPayload* appListRaw = nullptr;
                 errorCode = destination->GetList(
                     params.Type.Value(),
-                    params.Id.Value(), 
-                    params.Version.Value(), 
-                    params.AppName.Value(), 
+                    params.Id.Value(),
+                    params.Version.Value(),
+                    params.AppName.Value(),
                     params.Category.Value(), appListRaw);
                 auto appList = makeUniqueRpc(appListRaw);
 
@@ -272,7 +339,7 @@ namespace Plugin {
                     ERROR("GetList() result: ", errorCode);
                     return errorCode;
                 }
-                
+
                 ILISA::IApp::IIterator* appsRaw = nullptr;
                 errorCode = appList->Apps(appsRaw);
                 auto apps = makeUniqueRpc(appsRaw);
@@ -280,7 +347,7 @@ namespace Plugin {
                     ERROR("Apps() result: ", errorCode);
                     return errorCode;
                 }
-                
+
                 // Loop through apps in the response
                 bool hasNext = false;
                 while ((errorCode = apps->Next(hasNext)) == Core::ERROR_NONE && hasNext)
@@ -292,7 +359,7 @@ namespace Plugin {
                         ERROR("Current() result: ", errorCode);
                         return errorCode;
                     }
-                    
+
                     AppslistpayloadData::AppData app;
                     std::string val;
                     iApp->Id(val);
@@ -308,7 +375,7 @@ namespace Plugin {
                        ERROR("Installed() result: ", errorCode);
                        return errorCode;
                     }
-                    
+
                     // Loop through versions of a single app
                     while ((errorCode = versions->Next(hasNext)) == Core::ERROR_NONE && hasNext)
                     {
@@ -348,7 +415,7 @@ namespace Plugin {
         module.Unregister(_T("getProgress"));
         module.Unregister(_T("getList"));
     }
-    
+
     void LISA::SendEventOperationStatus(PluginHost::JSONRPC& module, const string& handle, const string& status, const string& details)
     {
         OperationStatusParamsData params;

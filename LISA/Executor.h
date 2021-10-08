@@ -74,12 +74,23 @@ public:
             const std::string& version,
             Filesystem::StorageDetails& details);
 
-   uint32_t GetAppDetailsList(const std::string& type,
+    uint32_t GetAppDetailsList(const std::string& type,
                               const std::string& id,
                               const std::string& version,
                               const std::string& appName,
                               const std::string& category,
                               std::vector<DataStorage::AppDetails>& appsDetailsList) const;
+
+    uint32_t SetMetadata(const std::string& type,
+                         const std::string& id,
+                         const std::string& version,
+                         const std::string& key,
+                         const std::string& value);
+
+    uint32_t GetMetadata(const std::string& type,
+                         const std::string& id,
+                         const std::string& version,
+                         std::vector<std::pair<std::string, std::string> >& metadataList) const;
 private:
 
     void handleDirectories();

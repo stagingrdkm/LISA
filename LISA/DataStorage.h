@@ -71,6 +71,16 @@ class DataStorage {
 
         virtual void RemoveAppData(const std::string& type,
                                    const std::string& id) = 0;
+
+        virtual void SetMetadata(const std::string& type,
+                         const std::string& id,
+                         const std::string& version,
+                         const std::string& key,
+                         const std::string& value) = 0;
+
+        virtual std::vector<std::pair<std::string, std::string> > GetMetadata(const std::string& type,
+                                                                      const std::string& id,
+                                                                      const std::string& version) = 0;
 };
 
 } // namespace LISA
