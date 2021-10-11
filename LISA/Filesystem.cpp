@@ -29,10 +29,6 @@ namespace Filesystem {
 
 namespace { // anonymous
 
-const std::string APPS_DIR = "/mnt/apps/";
-const std::string APPS_TMP_DIR = "/mnt/apps/tmp/";
-const std::string APPS_STORAGE_DIR = "/mnt/data/";
-
 void normalizeName(std::string& str)
 {
     auto isNotPosixCompatibile = [](const char c) {
@@ -43,21 +39,6 @@ void normalizeName(std::string& str)
 }
 
 } // namespace anonymous
-
-std::string getAppsTmpDir()
-{
-    return APPS_TMP_DIR;
-}
-
-std::string getAppsDir()
-{
-    return APPS_DIR;
-}
-
-std::string getAppsStorageDir()
-{
-    return APPS_STORAGE_DIR;
-}
 
 std::string createAppSubPath(std::string pathPart)
 {

@@ -45,19 +45,19 @@ namespace Plugin {
         string message;
         _lisa = service->Root<Exchange::ILISA>(_connectionId, 2000, _T("LISAImplementation"));
         if (_lisa != nullptr) {
-            Config config;
-            config.FromString(service->ConfigLine());
+            auto configResult = _lisa->Configure(service->ConfigLine());
+            if (configResult == Core::ERROR_NONE) {
+                TRACE_L1("LISA::Initialize register notification");
+                _lisa->Register(&_notification);
 
-            std::string path = (config.DbPath.IsSet() && !config.DbPath.Value().empty())
-                            ? config.DbPath.Value() : service->PersistentPath();
-
-            _lisa->Configure(path);
-
-            TRACE(Trace::Information, (_T("LISA::Initialize register notification")));
-            _lisa->Register(&_notification);
-
-            TRACE(Trace::Information, (_T("LISA::Initialize register JSON-RPC API")));
-            Register(*this, _lisa);
+                TRACE_L1("LISA::Initialize register JSON-RPC API");
+                Register(*this, _lisa);
+            } else {
+                TRACE_L1("LISA::Configure failed, reason: %u", configResult);
+                message = _T("LISA could not be instantiated - could not initialize database.");
+                _lisa->Release();
+                _lisa = nullptr;
+            }
         }
 
         if (_lisa == nullptr) {
@@ -78,11 +78,11 @@ namespace Plugin {
         ASSERT(_lisa != nullptr);
 
         if (_lisa != nullptr) {
+            TRACE_L1("unregister notification");
+            _service->Unregister(&_notification);
+            _lisa->Unregister(&_notification);
             TRACE_L1("unregister JSON-RPC API");
             Unregister(*this);
-            _service->Unregister(&_notification);
-            TRACE_L1("unregister notification");
-            _lisa->Unregister(&_notification);
             _lisa->Release();
         }
         _connectionId = 0;

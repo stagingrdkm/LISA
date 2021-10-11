@@ -43,10 +43,6 @@ struct StorageDetails
     std::string persistentUsedKB{};
 };
 
-std::string getAppsTmpDir();
-std::string getAppsDir();
-std::string getAppsStorageDir();
-
 const std::string LISA_EPOCH = "0";
 
 std::string createAppSubPath(std::string pathPart);

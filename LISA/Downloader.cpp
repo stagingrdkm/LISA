@@ -37,9 +37,10 @@ struct CurlLazyInitializer
 
 } // namespace anonymous
 
-Downloader::Downloader(const std::string& uri, ProgressListener listener)
-        :
-        progressListener{listener}
+Downloader::Downloader(const std::string& uri,
+                       DownloaderListener& aListener)
+                :
+                listener{aListener}
 {
     static CurlLazyInitializer lazyInit;
 
@@ -98,7 +99,9 @@ void Downloader::performAction()
     {
         CURLcode result = curl_easy_perform(curl.get());
 
-        if (result != CURLE_OK) {
+        if (result == CURLE_ABORTED_BY_CALLBACK) {
+            throw CancelledException();
+        } else if (result != CURLE_OK) {
             std::string message = std::string{"download error "} + curl_easy_strerror(result);
             throw DownloadError(message);
         }
@@ -181,16 +184,18 @@ int Downloader::curlProgressCb(void* userData,
 
 bool Downloader::onProgress(long dlTotal, long dlNow)
 {
-    Progress newProgres = {dlTotal, dlNow};
-    if (newProgres != progress) {
-        progress = newProgres;
-        INFO("download progress ", progress);
-        if (progressListener) {
-            progressListener(progress.percent());
+    if (! listener.isCancelled()) {
+        Progress newProgres = {dlTotal, dlNow};
+        if (newProgres != progress) {
+            progress = newProgres;
+            INFO("download progress ", progress);
+            listener.setProgress(progress.percent());
         }
+        return false;
+    } else {
+        INFO("download canceled");
+        return true;
     }
-    // TODO check if download should be canceled
-    return false;
 }
 
 std::ostream& operator<<(std::ostream& out, const Downloader::Progress& progress)
