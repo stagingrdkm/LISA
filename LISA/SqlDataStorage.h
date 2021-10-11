@@ -55,7 +55,8 @@ class SqlDataStorage: public DataStorage
                              const std::string& url,
                              const std::string& appName,
                              const std::string& category,
-                             const std::string& appPath) override;
+                             const std::string& appPath,
+                             const std::string& appStoragePath) override;
 
         bool IsAppInstalled(const std::string& type,
                             const std::string& id,

@@ -356,12 +356,13 @@ void Executor::doInstall(std::string type,
     INFO("unpacking ", tmpFilePath, "to ", appsPath);
     Archive::unpack(tmpFilePath, appsPath);
 
-    auto appStoragePath = Filesystem::getAppsStorageDir() + appSubPath;
+    auto appStorageSubPath = Filesystem::createAppPath(type, id);
+    auto appStoragePath = Filesystem::getAppsStorageDir() + appStorageSubPath;
     INFO("creating storage ", appStoragePath);
     Filesystem::ScopedDir scopedAppStorageDir{appStoragePath};
 
     setProgress(0, OperationStage::UPDATING_DATABASE);
-    dataBase->AddInstalledApp(type, id, version, url, appName, category, appSubPath);
+    dataBase->AddInstalledApp(type, id, version, url, appName, category, appSubPath, appStorageSubPath);
 
     // everything went fine, mark app directories to not be removed
     scopedAppDir.commit();
