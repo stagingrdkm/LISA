@@ -46,6 +46,12 @@ class DataStorage {
             std::string url;
         };
 
+        struct AppMetadata
+        {
+            AppDetails appDetails;
+            std::vector<std::pair<std::string, std::string> > metadata;
+        };
+
         virtual ~DataStorage() {}
         virtual void Initialize() = 0;
         virtual std::vector<std::string> GetAppsPaths(const std::string& type, const std::string& id, const std::string& version) = 0;
@@ -78,9 +84,14 @@ class DataStorage {
                          const std::string& key,
                          const std::string& value) = 0;
 
-        virtual std::vector<std::pair<std::string, std::string> > GetMetadata(const std::string& type,
-                                                                      const std::string& id,
-                                                                      const std::string& version) = 0;
+        virtual void ClearMetadata(const std::string& type,
+                         const std::string& id,
+                         const std::string& version,
+                         const std::string& key) = 0;
+
+        virtual AppMetadata GetMetadata(const std::string& type,
+                                        const std::string& id,
+                                        const std::string& version) = 0;
 };
 
 } // namespace LISA

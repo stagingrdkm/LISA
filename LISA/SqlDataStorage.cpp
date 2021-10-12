@@ -129,12 +129,11 @@ namespace { // anonymous
                          const std::string& key,
                          const std::string& value)
     {
-        string query = "INSERT OR REPLACE INTO metadata"
-                            "(app_idx, meta_key, meta_value) "
-                            "VALUES("
-                            "(SELECT installed_apps.idx FROM installed_apps INNER JOIN apps ON apps.idx = installed_apps.app_idx WHERE type = ?1 AND app_id = ?2 AND version = ?3),"
-                            "?4,"
-                            "?5);";
+        string query = "INSERT OR REPLACE INTO metadata(app_idx, meta_key, meta_value) "
+                        "VALUES("
+                        "(SELECT installed_apps.idx FROM installed_apps INNER JOIN apps ON apps.idx = installed_apps.app_idx WHERE type = ?1 AND app_id = ?2 AND version = ?3),"
+                        "?4,"
+                        "?5);";
 
         sqlite3_stmt* stmt;
         sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
@@ -148,17 +147,64 @@ namespace { // anonymous
         sqlite3_finalize(stmt);
     }
 
-    std::vector<std::pair<std::string, std::string> > SqlDataStorage::GetMetadata(const std::string& type,
-                                                                                  const std::string& id,
-                                                                                  const std::string& version)
+    void SqlDataStorage::ClearMetadata(const std::string& type,
+                         const std::string& id,
+                         const std::string& version,
+                         const std::string& key)
+    {
+        string query = "DELETE FROM metadata "
+                       "WHERE metadata.idx IN ("
+                       "SELECT metadata.idx FROM metadata "
+                       "INNER JOIN installed_apps ON installed_apps.idx = metadata.app_idx "
+                       "INNER JOIN apps ON apps.idx = installed_apps.app_idx "
+                       "WHERE type = ?1 AND app_id = ?2 AND version = ?3 AND meta_key = ?4);";
+
+        sqlite3_stmt* stmt;
+        sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
+
+        sqlite3_bind_text(stmt, 1, type.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, id.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 3, version.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 4, key.c_str(), -1, SQLITE_TRANSIENT);
+        ExecuteSqlStep(stmt);
+        sqlite3_finalize(stmt);
+    }
+
+    DataStorage::AppMetadata SqlDataStorage::GetMetadata(const std::string& type,
+                               const std::string& id,
+                               const std::string& version)
     {
         INFO(" ");
-        string query = "SELECT meta_key, meta_value FROM metadata "
+
+        sqlite3_stmt* stmt;
+        std::string appDetailsQuery =
+            "SELECT type, app_id, version, name, category, url FROM installed_apps "
+            "INNER JOIN apps ON apps.idx = installed_apps.app_idx "
+            "WHERE type = ?1 AND app_id = ?2 AND version = ?3";
+
+        sqlite3_prepare_v2(sqlite, appDetailsQuery.c_str(), appDetailsQuery.length(), &stmt, nullptr);
+
+        sqlite3_bind_text(stmt, 1, type.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, id.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 3, version.c_str(), -1, SQLITE_TRANSIENT);
+
+        if (sqlite3_step(stmt) != SQLITE_ROW) {
+            sqlite3_finalize(stmt);
+            throw SqlDataStorageError(std::string{"sqlite error: "} + sqlite3_errmsg(sqlite));
+        }
+        DataStorage::AppDetails appDetails{
+            reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)), reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1)),
+            reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2)), reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3)),
+            reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4)), reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5))};
+
+        sqlite3_finalize(stmt);
+
+        std::string metadataQuery = "SELECT meta_key, meta_value FROM metadata "
                        "INNER JOIN installed_apps ON installed_apps.idx = metadata.app_idx "
                        "INNER JOIN apps ON apps.idx = installed_apps.app_idx "
                        "WHERE type = ?1 AND app_id = ?2 AND version = ?3";
-        sqlite3_stmt* stmt;
-        sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
+
+        sqlite3_prepare_v2(sqlite, metadataQuery.c_str(), metadataQuery.length(), &stmt, nullptr);
 
         sqlite3_bind_text(stmt, 1, type.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text(stmt, 2, id.c_str(), -1, SQLITE_TRANSIENT);
@@ -174,11 +220,13 @@ namespace { // anonymous
             metadata.push_back(keyValue);
         }
         if (rc != SQLITE_DONE) {
+            sqlite3_finalize(stmt);
             throw SqlDataStorageError(std::string{"sqlite error: "} + sqlite3_errmsg(sqlite));
         }
 
         sqlite3_finalize(stmt);
-        return metadata;
+
+        return AppMetadata{appDetails, metadata};
     }
 
     void SqlDataStorage::InitDB()

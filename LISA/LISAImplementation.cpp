@@ -379,7 +379,15 @@ public:
             const std::string& key,
             const std::string& value) override
     {
-        return Core::ERROR_NONE;
+        return executor.SetMetadata(type, id, version, key, value);
+    }
+
+    uint32_t ClearAuxMetadata(const std::string& type,
+            const std::string& id,
+            const std::string& version,
+            const std::string& key) override
+    {
+        return executor.ClearMetadata(type, id, version, key);
     }
 
     uint32_t GetMetadata(const std::string& type,
@@ -387,31 +395,36 @@ public:
             const std::string& version,
             ILISA::IMetadataPayload*& result) override
     {
-        // Create resources
+        LISA::DataStorage::AppMetadata appMetadata;
+        auto rc = executor.GetMetadata(type, id, version, appMetadata);
+
         std::list<KeyValueImpl*> resources;
-        KeyValueImpl* res1 = Core::Service<KeyValueImpl>::Create<KeyValueImpl>(
-            Core::ToString("res1"), Core::ToString("value1"));
-        KeyValueImpl* res2 = Core::Service<KeyValueImpl>::Create<KeyValueImpl>(
-            Core::ToString("res2"), Core::ToString("value2"));
-
-        resources.push_back(res1);
-        resources.push_back(res2);
-
-        // Create auxMetadata
         std::list<KeyValueImpl*> auxMetadata;
-        KeyValueImpl* aux1 = Core::Service<KeyValueImpl>::Create<KeyValueImpl>(
-            Core::ToString("aux1"), Core::ToString("aux_value1"));
-        KeyValueImpl* aux2 = Core::Service<KeyValueImpl>::Create<KeyValueImpl>(
-            Core::ToString("aux2"), Core::ToString("aux_value2"));
 
-        auxMetadata.push_back(aux1);
-        auxMetadata.push_back(aux2);
+        if (rc == Core::ERROR_NONE) {
+            // TODO: add resources (downloads) to the result here when download function is implemented
+
+            // Add metadata to the result
+            for (auto pair : appMetadata.metadata)
+            {
+                KeyValueImpl* keyValue = Core::Service<KeyValueImpl>::Create<KeyValueImpl>(
+                    pair.first, pair.second);
+                auxMetadata.push_back(keyValue);
+            }
+        }
 
         ILISA::IMetadataPayload* metadataPayload = Core::Service<MetadataPayloadImpl>::Create<ILISA::IMetadataPayload>(
-            Core::ToString("sampleAppName"), Core::ToString("sampleCategory"), Core::ToString("sampleUrl"),
+            appMetadata.appDetails.appName, appMetadata.appDetails.category, appMetadata.appDetails.url,
             resources, auxMetadata
         );
         result = metadataPayload;
+
+        for (auto res : resources) {
+            res->Release();
+        }
+        for (auto meta : auxMetadata) {
+            meta->Release();
+        }
         return Core::ERROR_NONE;
     }
 

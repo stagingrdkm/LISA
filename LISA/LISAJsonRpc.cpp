@@ -199,6 +199,23 @@ namespace Plugin {
                 return errorCode;
             });
 
+        module.Register<ClearAuxMetadataParamsData,void>(_T("clearAuxMetadata"),
+            [destination, this](const ClearAuxMetadataParamsData& params) -> uint32_t
+            {
+                uint32_t errorCode = Core::ERROR_NONE;
+                INFO("ClearAuxMetadata");
+
+                errorCode = destination->ClearAuxMetadata(
+                    params.Type.Value(),
+                    params.Id.Value(),
+                    params.Version.Value(),
+                    params.Key.Value());
+
+                INFO("ClearAuxMetadata finished with code: ", errorCode);
+                return errorCode;
+            });
+
+
         // For some reason JsonGenerator doesn't generate separate ParamsInfo/ParamsData
         // classes for functions that have the same input params. In this case GetMetadata
         // and GetStorageDetails have the same 3 input params and only GetStorageDetailsParamsInfo

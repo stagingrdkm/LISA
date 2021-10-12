@@ -239,13 +239,27 @@ uint32_t Executor::SetMetadata(const std::string& type,
     return ERROR_NONE;
 }
 
+uint32_t Executor::ClearMetadata(const std::string& type,
+                         const std::string& id,
+                         const std::string& version,
+                         const std::string& key)
+{
+    try {
+        dataBase->ClearMetadata(type, id, version, key);
+    } catch (std::exception& error) {
+        ERROR("Unable to clear metadata: ", error.what());
+        return Core::ERROR_GENERAL;
+    }
+    return ERROR_NONE;
+}
+
 uint32_t Executor::GetMetadata(const std::string& type,
                          const std::string& id,
                          const std::string& version,
-                         std::vector<std::pair<std::string, std::string> >& metadataList) const
+                         DataStorage::AppMetadata& metadata) const
 {
     try {
-        metadataList = dataBase->GetMetadata(type, id, version);
+        metadata = dataBase->GetMetadata(type, id, version);
     } catch (std::exception& error) {
         ERROR("Unable to get metadata: ", error.what());
         return Core::ERROR_GENERAL;

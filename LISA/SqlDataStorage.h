@@ -74,9 +74,14 @@ class SqlDataStorage: public DataStorage
                          const std::string& key,
                          const std::string& value) override;
 
-        std::vector<std::pair<std::string, std::string> > GetMetadata(const std::string& type,
-                                                                      const std::string& id,
-                                                                      const std::string& version) override;
+        void ClearMetadata(const std::string& type,
+                         const std::string& id,
+                         const std::string& version,
+                         const std::string& key) override;
+
+        DataStorage::AppMetadata GetMetadata(const std::string& type,
+                               const std::string& id,
+                               const std::string& version) override;
 
     private:
         static sqlite3* sqlite;
