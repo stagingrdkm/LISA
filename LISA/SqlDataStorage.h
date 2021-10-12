@@ -55,7 +55,8 @@ class SqlDataStorage: public DataStorage
                              const std::string& url,
                              const std::string& appName,
                              const std::string& category,
-                             const std::string& appPath) override;
+                             const std::string& appPath,
+                             const std::string& appStoragePath) override;
 
         bool IsAppInstalled(const std::string& type,
                             const std::string& id,
@@ -85,7 +86,7 @@ class SqlDataStorage: public DataStorage
 
     private:
         static sqlite3* sqlite;
-        const std::string db_name = "/apps.db";
+        const std::string db_name = "apps.db";
         const std::string db_path;
         using SqlCallback = int (*)(void*, int, char**, char**);
         constexpr static int INVALID_INDEX = -1;

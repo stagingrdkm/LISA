@@ -78,11 +78,12 @@ namespace { // anonymous
                                          const std::string& url,
                                          const std::string& appName,
                                          const std::string& category,
-                                         const std::string& appPath)
+                                         const std::string& appPath,
+                                         const std::string& appStoragePath)
     {
         auto timeCreated = timeNow();
 
-        InsertIntoApps(type, id, appPath, timeCreated);
+        InsertIntoApps(type, id, appStoragePath, timeCreated);
         auto appIdx = GetAppIdx(type, id, version);
         InsertIntoInstalledApps(appIdx, version, appName, category, url, appPath, timeCreated);
     }

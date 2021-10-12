@@ -65,7 +65,8 @@ class DataStorage {
                                      const std::string& url,
                                      const std::string& appName,
                                      const std::string& category,
-                                     const std::string& appPath) = 0;
+                                     const std::string& appPath,
+                                     const std::string& appStoragePath) = 0;
 
         virtual bool IsAppInstalled(const std::string& type,
                                     const std::string& id,

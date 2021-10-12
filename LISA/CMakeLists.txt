@@ -28,6 +28,7 @@ find_package(Sqlite REQUIRED)
 
 add_library(${MODULE_NAME} SHARED
     Archive.cpp
+    Config.cpp
     Downloader.cpp
     Executor.cpp
     File.cpp
@@ -42,6 +43,8 @@ set_target_properties(${MODULE_NAME} PROPERTIES
         CXX_STANDARD 11
         CXX_STANDARD_REQUIRED YES)
 
+add_subdirectory(AuthModule)
+
 target_link_libraries(${MODULE_NAME}
     PRIVATE ${NAMESPACE}Plugins::${NAMESPACE}Plugins
     PRIVATE ${CURL_LIBRARIES}
@@ -49,6 +52,7 @@ target_link_libraries(${MODULE_NAME}
     PRIVATE ${Boost_FILESYSTEM_LIBRARY}
     PRIVATE ${Boost_SYSTEM_LIBRARY}
     PRIVATE ${SQLITE_LIBRARIES}
+    PRIVATE LISAAuthModule
 )
 
 install(TARGETS ${MODULE_NAME}

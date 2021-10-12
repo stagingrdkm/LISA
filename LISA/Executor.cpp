@@ -20,10 +20,12 @@
 #include "Executor.h"
 
 #include "Archive.h"
+#include "Config.h"
 #include "Debug.h"
 #include "Downloader.h"
 #include "Filesystem.h"
 #include "SqlDataStorage.h"
+#include "AuthModule/Auth.h"
 
 #include <array>
 #include <cassert>
@@ -32,6 +34,8 @@
 namespace WPEFramework {
 namespace Plugin {
 namespace LISA {
+
+extern "C" AuthMethod getAuthenticationMethod(const char* appType, const char* id, const char* url);
 
 namespace // anonymous
 {
@@ -57,13 +61,15 @@ enum ReturnCodes {
     ERROR_ALREADY_INSTALLED = 1003,
 };
 
-uint32_t Executor::Configure(const std::string& dbPath)
+uint32_t Executor::Configure(const std::string& configString)
 {
-    auto result{ERROR_GENERAL};
+    INFO("config: '", configString, "'");
+    config = Config{configString};
+
+    auto result{Core::ERROR_NONE};
     try {
         handleDirectories();
-        initializeDataBase(dbPath);
-        result = ERROR_NONE;
+        initializeDataBase(config.getDatabasePath());
         INFO("configuration done");
     } catch (std::exception& error) {
         ERROR("Unable to configure executor: ", error.what());
@@ -144,17 +150,19 @@ uint32_t Executor::Uninstall(const std::string& type,
         doUninstall(type, id, version, uninstallType);
     });
 
+    handle = currentTask.handle;
     return ERROR_NONE;
 }
 
 uint32_t Executor::GetProgress(const std::string& handle, std::uint32_t& progress)
 {
     LockGuard lock(taskMutex);
-    if (handle != currentTask.handle) {
+    if (isCurrentHandle(handle)) {
+        progress = currentTask.progress;
+        return ERROR_NONE;
+    } else {
         return ERROR_WRONG_PARAMS;
     }
-    progress = currentTask.progress;
-    return ERROR_NONE;
 }
 
 bool Executor::getStorageParamsValid(const std::string& type,
@@ -177,10 +185,10 @@ uint32_t Executor::GetStorageDetails(const std::string& type,
     try {
         if(type.empty()) {
             INFO("Calculating overall usage");
-            details.appPath = fs::getAppsDir();
-            details.appUsedKB = std::to_string((fs::getDirectorySpace(fs::getAppsDir()) + fs::getDirectorySpace(fs::getAppsTmpDir())) / 1024);
-            details.persistentPath = fs::getAppsStorageDir();
-            details.persistentUsedKB = std::to_string(fs::getDirectorySpace(fs::getAppsStorageDir()) / 1024);
+            details.appPath = config.getAppsPath();
+            details.appUsedKB = std::to_string((fs::getDirectorySpace(config.getAppsPath()) + fs::getDirectorySpace(config.getAppsTmpPath())) / 1024);
+            details.persistentPath = config.getAppsStoragePath();
+            details.persistentUsedKB = std::to_string(fs::getDirectorySpace(config.getAppsStoragePath()) / 1024);
         } else {
             INFO("Calculating usage for: type = ", type, " id = ", id, " version = ", version);
             std::vector<std::string> appsPaths = dataBase->GetAppsPaths(type, id, version);
@@ -188,15 +196,15 @@ uint32_t Executor::GetStorageDetails(const std::string& type,
             // In Stage 1 there will be only one entry here
             for(const auto& i: appsPaths)
             {
-                appUsedKB += fs::getDirectorySpace(i);
-                details.appPath = fs::getAppsDir() + i;
+                details.appPath = config.getAppsPath() + i;
+                appUsedKB += fs::getDirectorySpace(details.appPath);
             }
             std::vector<std::string> dataPaths = dataBase->GetDataPaths(type, id);
             long persistentUsedKB{};
             for(const auto& i: dataPaths)
             {
-                persistentUsedKB += fs::getDirectorySpace(i);
-                details.persistentPath = fs::getAppsStorageDir() + i;
+                details.persistentPath = config.getAppsStoragePath() + i;
+                persistentUsedKB += fs::getDirectorySpace(details.persistentPath);
             }
             details.appUsedKB = std::to_string(appUsedKB / 1024);
             details.persistentUsedKB = std::to_string(persistentUsedKB / 1024);
@@ -222,6 +230,27 @@ uint32_t Executor::GetAppDetailsList(const std::string& type,
         return Core::ERROR_GENERAL;
     }
     return ERROR_NONE;
+}
+
+uint32_t Executor::Cancel(const std::string& handle)
+{
+    INFO(" ");
+    {
+        LockGuard lock(taskMutex);
+        if (!isCurrentHandle(handle)
+            || (currentTask.progress >= stageBase[enumToInt(OperationStage::EXTRACTING)])) {
+            return ERROR_WRONG_PARAMS;
+        } else {
+            currentTask.cancelled.store(true);
+        }
+    }
+    worker.join();
+    return ERROR_NONE;
+}
+
+bool Executor::isCurrentHandle(const std::string& aHandle)
+{
+    return ((!currentTask.handle.empty()) && (currentTask.handle == aHandle));
 }
 
 uint32_t Executor::SetMetadata(const std::string& type,
@@ -269,15 +298,15 @@ uint32_t Executor::GetMetadata(const std::string& type,
 
 void Executor::handleDirectories()
 {
-    Filesystem::createDirectory(Filesystem::getAppsDir() + Filesystem::LISA_EPOCH);
-    Filesystem::createDirectory(Filesystem::getAppsStorageDir() + Filesystem::LISA_EPOCH);
-    Filesystem::removeAllDirectoriesExcept(Filesystem::getAppsDir(), Filesystem::LISA_EPOCH);
-    Filesystem::removeAllDirectoriesExcept(Filesystem::getAppsStorageDir(), Filesystem::LISA_EPOCH);
+    Filesystem::createDirectory(config.getAppsPath() + Filesystem::LISA_EPOCH);
+    Filesystem::createDirectory(config.getAppsStoragePath() + Filesystem::LISA_EPOCH);
+    Filesystem::removeAllDirectoriesExcept(config.getAppsPath(), Filesystem::LISA_EPOCH);
+    Filesystem::removeAllDirectoriesExcept(config.getAppsStoragePath(), Filesystem::LISA_EPOCH);
 }
 
 void Executor::initializeDataBase(const std::string& dbPath)
 {
-    std::string path = dbPath + '/' + Filesystem::LISA_EPOCH;
+    std::string path = dbPath + Filesystem::LISA_EPOCH + '/';
     Filesystem::ScopedDir dbDir(path);
     dataBase = std::make_unique<LISA::SqlDataStorage>(path);
     dataBase->Initialize();
@@ -294,11 +323,10 @@ void Executor::executeTask(std::function<void()> task)
 {
     assert(task);
 
-    std::thread worker{[=]
+    worker = std::thread{[=]
     {
         taskRunner(std::move(task));
     }};
-    worker.detach();
 }
 
 void Executor::taskRunner(std::function<void()> task)
@@ -314,21 +342,32 @@ void Executor::taskRunner(std::function<void()> task)
         INFO(task, " done");
         status = OperationStatus::SUCCESS;
     }
+    catch(CancelledException& exc){
+        // nothing to do, cancelled flag already set
+    }
     catch(std::exception& exc){
         ERROR("exception running ", task, ": ", exc.what());
         status = OperationStatus::FAILED;
         details = exc.what();
     }
 
+    auto cancelled{false};
     {
         LockGuard lock(taskMutex);
-        INFO("scheduled ", currentTask, " done");
-        // TODO Check if not cancelled and do not notify with operationStatus
-        handle = currentTask.handle;
-        currentTask = Task{};
+        cancelled = currentTask.cancelled.load();
+        if (! cancelled){
+            worker.detach();
+            handle = currentTask.handle;
+        }
+        currentTask.reset();
     }
 
-    operationStatusCallback(handle, status, details);
+    INFO("scheduled ", currentTask, (cancelled ? " cancelled" : " done"));
+
+    if (! cancelled)
+    {
+        operationStatusCallback(handle, status, details);
+    }
 }
 
 bool Executor::isAppInstalled(const std::string& type,
@@ -354,20 +393,20 @@ void Executor::doInstall(std::string type,
 {
     INFO("url=", url, " appName=", appName, " cat=", category);
 
-    // TODO check authentication method
+    auto authMethod = getAuthenticationMethod(type.c_str(), id.c_str(), url.c_str());
+    if(NONE != authMethod) {
+        std::string message = std::string{} + "Authentication method unsupported: " + std::to_string(authMethod);
+        throw std::runtime_error(message);
+    }
 
     auto appSubPath = Filesystem::createAppPath(type, id, version);
     INFO("appSubPath: ", appSubPath);
 
-    auto tmpPath = Filesystem::getAppsTmpDir();
+    auto tmpPath = config.getAppsTmpPath();
     auto tmpDirPath = tmpPath + appSubPath;
     Filesystem::ScopedDir scopedTmpDir{tmpDirPath};
 
-    auto progressListener = [this] (int progress) {
-        setProgress(progress, OperationStage::DOWNLOADING);
-    };
-
-    Downloader downloader{url, progressListener};
+    Downloader downloader{url, *this};
 
     auto downloadSize = downloader.getContentLength();
     auto tmpFreeSpace = Filesystem::getFreeSpace(tmpDirPath);
@@ -384,20 +423,22 @@ void Executor::doInstall(std::string type,
 
     downloader.get(tmpFilePath);
 
-    const std::string appsPath = Filesystem::getAppsDir() + appSubPath;
+    const std::string appsPath = config.getAppsPath() + appSubPath;
     INFO("creating ", appsPath);
     Filesystem::ScopedDir scopedAppDir{appsPath};
 
-    setProgress(0, OperationStage::UNTARING);
+    setProgress(0, OperationStage::EXTRACTING);
     INFO("unpacking ", tmpFilePath, "to ", appsPath);
     Archive::unpack(tmpFilePath, appsPath);
 
-    auto appStoragePath = Filesystem::getAppsStorageDir() + appSubPath;
+    auto appStorageSubPath = Filesystem::createAppPath(type, id);
+    auto appStoragePath = config.getAppsStoragePath() + appStorageSubPath;
+
     INFO("creating storage ", appStoragePath);
     Filesystem::ScopedDir scopedAppStorageDir{appStoragePath};
 
     setProgress(0, OperationStage::UPDATING_DATABASE);
-    dataBase->AddInstalledApp(type, id, version, url, appName, category, appSubPath);
+    dataBase->AddInstalledApp(type, id, version, url, appName, category, appSubPath, appStorageSubPath);
 
     // everything went fine, mark app directories to not be removed
     scopedAppDir.commit();
@@ -418,14 +459,14 @@ void Executor::doUninstall(std::string type, std::string id, std::string version
 
     // TODO should "id" be also removed? what if two versions are installed?
     auto appSubPath = Filesystem::createAppPath(type, id, version);
-    auto appPath = Filesystem::getAppsDir() + appSubPath;
+    auto appPath = config.getAppsPath() + appSubPath;
 
     INFO("removing ", appPath);
     Filesystem::removeDirectory(appPath);
 
     if (uninstallType == "full") {
         dataBase->RemoveAppData(type, id);
-        auto appStoragePath = Filesystem::getAppsStorageDir() + appSubPath;
+        auto appStoragePath = config.getAppsStoragePath() + appSubPath;
         INFO("removing storage directory ", appStoragePath);
         Filesystem::removeDirectory(appStoragePath);
     }
@@ -435,12 +476,18 @@ void Executor::doUninstall(std::string type, std::string id, std::string version
     INFO("finished");
 }
 
+void Executor::setProgress(int progress)
+{
+    setProgress(progress, OperationStage::DOWNLOADING);
+}
+
+bool Executor::isCancelled()
+{
+    return currentTask.cancelled.load();
+}
+
 void Executor::setProgress(int stagePercent, OperationStage stage)
 {
-    constexpr auto STAGES = enumToInt(OperationStage::COUNT);
-    const std::array<int, STAGES> stageBase = {{0, 90, 95, 100}};
-    const std::array<double, STAGES> stageFactor = {{90.0/100, 5.0/100, 5.0/100, 0}};
-
     int stageIndex = enumToInt(stage);
     int resultPercent = stageBase[stageIndex] + (static_cast<int>(stagePercent * stageFactor[stageIndex]));
 

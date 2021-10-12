@@ -430,7 +430,7 @@ public:
 
     uint32_t Cancel(const std::string& handle) override
     {
-        return Core::ERROR_NONE;
+        return executor.Cancel(handle);
     }
 
     uint32_t GetProgress(const std::string& handle, uint32_t& progress) override
@@ -438,9 +438,9 @@ public:
         return executor.GetProgress(handle, progress);
     }
 
-    uint32_t Configure(const std::string& dbpath) override
+    uint32_t Configure(const std::string& config) override
     {
-        return executor.Configure(dbpath);
+        return executor.Configure(config);
     }
 
     virtual uint32_t Register(ILISA::INotification* notification) override
@@ -860,12 +860,9 @@ public:
     {
         uint32_t ret = Core::ERROR_NONE;
         LISA::Filesystem::StorageDetails details;
-        if(type.empty() && !appsStorageKBCache.empty() && !appsKBCache.empty()) {
+        if(type.empty() && !cachedStorageDetails.appPath.empty()) {
             INFO("Using cached values");
-            details.appPath = LISA::Filesystem::getAppsDir();
-            details.appUsedKB = appsKBCache;
-            details.persistentPath = LISA::Filesystem::getAppsStorageDir();
-            details.persistentUsedKB = appsStorageKBCache;
+            details = cachedStorageDetails;
         } else {
             INFO("Calculating storage usage");
             ret = executor.GetStorageDetails(type, id, version, details);
@@ -884,8 +881,7 @@ private:
     using LockGuard = std::lock_guard<std::mutex>;
     std::list<Exchange::ILISA::INotification*> _notificationCallbacks{};
     std::mutex notificationMutex{};
-    std::string appsKBCache{};
-    std::string appsStorageKBCache{};
+    LISA::Filesystem::StorageDetails cachedStorageDetails;
 };
 
 SERVICE_REGISTRATION(LISAImplementation, 1, 0);

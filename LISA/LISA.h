@@ -112,23 +112,6 @@ class LISA : public PluginHost::IPlugin, public PluginHost::JSONRPC {
         Exchange::ILISA* _lisa;
         Core::Sink<Notification> _notification;
 
-        class Config : public Core::JSON::Container {
-            private:
-                Config(const Config&) = delete;
-                Config& operator=(const Config&) = delete;
-
-            public:
-                Config(): Core::JSON::Container(), DbPath()
-                {
-                    Add(_T("dbpath"), &DbPath);
-                }
-                virtual ~Config()
-                {
-                }
-
-            public:
-                Core::JSON::String DbPath;
-        };
     // JSON-RPC
     private:
         void Register(PluginHost::JSONRPC& module, Exchange::ILISA* destination);
