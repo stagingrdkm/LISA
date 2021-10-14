@@ -221,39 +221,46 @@ namespace Plugin {
         // and GetStorageDetails have the same 3 input params and only GetStorageDetailsParamsInfo
         // was generated. Despite there is no GetMetadataParamsInfo we can use the params for
         // GetStorageDetails in it's place.
-        module.Register<GetStorageDetailsParamsInfo,MetadatapayloadData>(_T("getMetadata"),
-            [destination, this](const GetStorageDetailsParamsInfo& params, MetadatapayloadData& response) -> uint32_t
+        using GetMetadataParamsInfo = GetStorageDetailsParamsInfo;
+        module.Register<GetMetadataParamsInfo,MetadatapayloadData>(_T("getMetadata"),
+            [destination, this](const GetMetadataParamsInfo& params, MetadatapayloadData& response) -> uint32_t
             {
                 INFO("GetMetadata");
                 uint32_t errorCode = Core::ERROR_NONE;
-                Exchange::ILISA::IMetadataPayload* result = nullptr;
-                Exchange::ILISA::IKeyValueIterator* resources = nullptr;
-                Exchange::ILISA::IKeyValueIterator* auxMetadata = nullptr;
-                Exchange::ILISA::IKeyValue* iKeyValue = nullptr;
+                Exchange::ILISA::IMetadataPayload* resultRaw = nullptr;
+                Exchange::ILISA::IKeyValueIterator* resourcesRaw = nullptr;
+                Exchange::ILISA::IKeyValueIterator* auxMetadataRaw = nullptr;
+                Exchange::ILISA::IKeyValue* iKeyValueRaw = nullptr;
                 bool hasNext = false;
                 std::string val;
 
                 errorCode = destination->GetMetadata(
                     params.Type.Value(),
                     params.Id.Value(),
-                    params.Version.Value(), result);
+                    params.Version.Value(), resultRaw);
 
                 if (errorCode != Core::ERROR_NONE) {
                     ERROR("LISAJsonRpc GetMetadata() result: ", errorCode);
                     return errorCode;
                 }
 
-                errorCode = result->Resources(resources);
+                auto result = makeUniqueRpc(resultRaw);
+
+                errorCode = result->Resources(resourcesRaw);
                 if (errorCode != Core::ERROR_NONE) {
                     ERROR("LISAJsonRpc Resources() result: ", errorCode);
                     return errorCode;
                 }
 
-                errorCode = result->AuxMetadata(auxMetadata);
+                auto resources = makeUniqueRpc(resourcesRaw);
+
+                errorCode = result->AuxMetadata(auxMetadataRaw);
                 if (errorCode != Core::ERROR_NONE) {
                     ERROR("LISAJsonRpc AuxMetadata() result: ", errorCode);
                     return errorCode;
                 }
+
+                auto auxMetadata = makeUniqueRpc(auxMetadataRaw);
 
                 result->AppName(val);
                 response.AppName = Core::ToString(val);
@@ -265,11 +272,12 @@ namespace Plugin {
                 // Loop through resources in the response
                 while ((errorCode = resources->Next(hasNext)) == Core::ERROR_NONE && hasNext)
                 {
-                    errorCode = resources->Current(iKeyValue);
+                    errorCode = resources->Current(iKeyValueRaw);
                     if (errorCode != Core::ERROR_NONE) {
                         ERROR("LISAJsonRpc getMetadata Current() result: ", errorCode);
                         return errorCode;
                     }
+                    auto iKeyValue = makeUniqueRpc(iKeyValueRaw);
 
                     KeyvalueInfo resource;
                     iKeyValue->Key(val);
@@ -284,20 +292,21 @@ namespace Plugin {
                 // Loop through aux metadata in the response
                 while ((errorCode = auxMetadata->Next(hasNext)) == Core::ERROR_NONE && hasNext)
                 {
-                    errorCode = auxMetadata->Current(iKeyValue);
+                    errorCode = auxMetadata->Current(iKeyValueRaw);
                     if (errorCode != Core::ERROR_NONE) {
                         ERROR("LISAJsonRpc getMetadata Current() result: ", errorCode);
                         return errorCode;
                     }
+                    auto iKeyValue = makeUniqueRpc(iKeyValueRaw);
 
-                    KeyvalueInfo auxMetadata;
+                    KeyvalueInfo keyValue;
                     iKeyValue->Key(val);
-                    auxMetadata.Key = Core::ToString(val);
-                    INFO("LISAJsonRpc GetMetadata auxMetadata key: ", val);
+                    keyValue.Key = Core::ToString(val);
+                    INFO("LISAJsonRpc GetMetadata keyValue key: ", val);
                     iKeyValue->Value(val);
-                    auxMetadata.Value = Core::ToString(val);
-                    INFO("LISAJsonRpc GetMetadata auxMetadata value: ", val);
-                    response.AuxMetadata.Add(auxMetadata);
+                    keyValue.Value = Core::ToString(val);
+                    INFO("LISAJsonRpc GetMetadata keyValue value: ", val);
+                    response.AuxMetadata.Add(keyValue);
                 }
 
                 INFO("GetMetadata finished with code: ", errorCode);
@@ -320,8 +329,9 @@ namespace Plugin {
         // CancelParamsInfo is used instead of GetProgressParamsInfo which
         // simply wasn't generated. See the comment for getMetadata as this
         // is the same case
-        module.Register<CancelParamsInfo,Core::JSON::DecUInt64>(_T("getProgress"),
-            [destination, this](const CancelParamsInfo& params, Core::JSON::DecUInt64& response) -> uint32_t
+        using GetProgressParamsInfo = CancelParamsInfo;
+        module.Register<GetProgressParamsInfo,Core::JSON::DecUInt64>(_T("getProgress"),
+            [destination, this](const GetProgressParamsInfo& params, Core::JSON::DecUInt64& response) -> uint32_t
             {
                 uint32_t errorCode = Core::ERROR_NONE;
                 INFO("GetProgress");
