@@ -69,6 +69,21 @@ class SqlDataStorage: public DataStorage
         void RemoveAppData(const std::string& type,
                            const std::string& id) override;
 
+        void SetMetadata(const std::string& type,
+                         const std::string& id,
+                         const std::string& version,
+                         const std::string& key,
+                         const std::string& value) override;
+
+        void ClearMetadata(const std::string& type,
+                         const std::string& id,
+                         const std::string& version,
+                         const std::string& key) override;
+
+        DataStorage::AppMetadata GetMetadata(const std::string& type,
+                               const std::string& id,
+                               const std::string& version) override;
+
     private:
         static sqlite3* sqlite;
         const std::string db_name = "apps.db";

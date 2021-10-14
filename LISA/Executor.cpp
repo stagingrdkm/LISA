@@ -253,6 +253,49 @@ bool Executor::isCurrentHandle(const std::string& aHandle)
     return ((!currentTask.handle.empty()) && (currentTask.handle == aHandle));
 }
 
+uint32_t Executor::SetMetadata(const std::string& type,
+                         const std::string& id,
+                         const std::string& version,
+                         const std::string& key,
+                         const std::string& value)
+{
+    try {
+        dataBase->SetMetadata(type, id, version, key, value);
+    } catch (std::exception& error) {
+        ERROR("Unable to set metadata: ", error.what());
+        return Core::ERROR_GENERAL;
+    }
+    return ERROR_NONE;
+}
+
+uint32_t Executor::ClearMetadata(const std::string& type,
+                         const std::string& id,
+                         const std::string& version,
+                         const std::string& key)
+{
+    try {
+        dataBase->ClearMetadata(type, id, version, key);
+    } catch (std::exception& error) {
+        ERROR("Unable to clear metadata: ", error.what());
+        return Core::ERROR_GENERAL;
+    }
+    return ERROR_NONE;
+}
+
+uint32_t Executor::GetMetadata(const std::string& type,
+                         const std::string& id,
+                         const std::string& version,
+                         DataStorage::AppMetadata& metadata) const
+{
+    try {
+        metadata = dataBase->GetMetadata(type, id, version);
+    } catch (std::exception& error) {
+        ERROR("Unable to get metadata: ", error.what());
+        return Core::ERROR_GENERAL;
+    }
+    return ERROR_NONE;
+}
+
 void Executor::handleDirectories()
 {
     Filesystem::createDirectory(config.getAppsPath() + Filesystem::LISA_EPOCH);

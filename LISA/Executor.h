@@ -88,6 +88,21 @@ public:
 
     uint32_t Cancel(const std::string& handle);
 
+    uint32_t SetMetadata(const std::string& type,
+                         const std::string& id,
+                         const std::string& version,
+                         const std::string& key,
+                         const std::string& value);
+
+    uint32_t ClearMetadata(const std::string& type,
+                         const std::string& id,
+                         const std::string& version,
+                         const std::string& key);
+
+    uint32_t GetMetadata(const std::string& type,
+                         const std::string& id,
+                         const std::string& version,
+                         DataStorage::AppMetadata& metadata) const;
 private:
 
     enum class OperationStage
