@@ -84,7 +84,7 @@ namespace { // anonymous
         auto timeCreated = timeNow();
 
         InsertIntoApps(type, id, appStoragePath, timeCreated);
-        auto appIdx = GetAppIdx(type, id, version);
+        auto appIdx = GetAppIdx(type, id);
         InsertIntoInstalledApps(appIdx, version, appName, category, url, appPath, timeCreated);
     }
 
@@ -302,8 +302,7 @@ namespace { // anonymous
     }
 
     int SqlDataStorage::GetAppIdx(const std::string& type,
-                                  const std::string& id,
-                                  const std::string& version)
+                                  const std::string& id)
     {
         INFO(" ");
         int appIdx{INVALID_INDEX};
@@ -352,13 +351,14 @@ namespace { // anonymous
                                                  const std::string& version)
     {
         INFO(" ");
-        auto appIdx = GetAppIdx(type, id, version);
+        auto appIdx = GetAppIdx(type, id);
 
-        string query = "DELETE FROM installed_apps WHERE app_idx == $1;";
+        string query = "DELETE FROM installed_apps WHERE app_idx == $1 AND version == $2;";
         sqlite3_stmt* stmt;
         sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
 
         sqlite3_bind_text(stmt, 1, std::to_string(appIdx).c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, version.c_str(), -1, SQLITE_TRANSIENT);
         ExecuteSqlStep(stmt);
         sqlite3_finalize(stmt);
     }

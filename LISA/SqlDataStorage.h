@@ -91,8 +91,7 @@ class SqlDataStorage: public DataStorage
                             const std::string& created);
 
         int GetAppIdx(const std::string& type,
-                      const std::string& id,
-                      const std::string& version);
+                      const std::string& id);
 
         void InsertIntoInstalledApps(int idx,
                                      const std::string& version,
