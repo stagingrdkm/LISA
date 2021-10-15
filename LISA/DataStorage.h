@@ -54,10 +54,16 @@ class DataStorage {
 
         virtual ~DataStorage() {}
         virtual void Initialize() = 0;
-        virtual std::vector<std::string> GetAppsPaths(const std::string& type, const std::string& id, const std::string& version) = 0;
-        virtual std::vector<std::string> GetDataPaths(const std::string& type, const std::string& id) = 0;
-        virtual std::vector<AppDetails> GetAppDetailsList(const std::string& type, const std::string& id, const std::string& version,
-                                                          const std::string& appName, const std::string& category) = 0;
+        virtual std::vector<std::string> GetAppsPaths(const std::string& type = {},
+                                                      const std::string& id = {},
+                                                      const std::string& version = {}) = 0;
+        virtual std::vector<std::string> GetDataPaths(const std::string& type = {},
+                                                      const std::string& id = {}) = 0;
+        virtual std::vector<AppDetails> GetAppDetailsList(const std::string& type = {},
+                                                          const std::string& id = {},
+                                                          const std::string& version = {},
+                                                          const std::string& appName = {},
+                                                          const std::string& category = {}) = 0;
 
         virtual void AddInstalledApp(const std::string& type,
                                      const std::string& id,
@@ -71,6 +77,9 @@ class DataStorage {
         virtual bool IsAppInstalled(const std::string& type,
                                     const std::string& id,
                                     const std::string& version) = 0;
+
+        virtual bool IsAppData(const std::string& type,
+                               const std::string& id) = 0;
 
         virtual void RemoveInstalledApp(const std::string& type,
                                         const std::string& id,
@@ -93,6 +102,13 @@ class DataStorage {
         virtual AppMetadata GetMetadata(const std::string& type,
                                         const std::string& id,
                                         const std::string& version) = 0;
+
+        friend std::ostream& operator<<(std::ostream& out,
+                                        const AppDetails& details)
+        {
+            return out << "[" << details.type << ":" << details.id << ":" << details.version << ":" << details.appName
+                       << ":" << details.category << "]";
+        }
 };
 
 } // namespace LISA

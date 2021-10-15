@@ -143,6 +143,8 @@ private:
                      std::string version,
                      std::string uninstallType);
 
+    void doMaintanace();
+
     bool getStorageParamsValid(const std::string& type,
             const std::string& id,
             const std::string& version) const;

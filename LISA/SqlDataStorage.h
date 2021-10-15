@@ -62,6 +62,9 @@ class SqlDataStorage: public DataStorage
                             const std::string& id,
                             const std::string& version) override;
 
+        bool IsAppData(const std::string& type,
+                       const std::string& id);
+
         void RemoveInstalledApp(const std::string& type,
                                 const std::string& id,
                                 const std::string& version) override;

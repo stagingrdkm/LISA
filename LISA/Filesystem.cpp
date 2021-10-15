@@ -64,7 +64,7 @@ bool directoryExists(const std::string& path)
 bool createDirectory(const std::string& path)
 {
     bool result{false};
-
+    INFO("creating directory ", path);
     try {
         result = boost::filesystem::create_directories(path);
     }
@@ -142,6 +142,43 @@ void removeAllDirectoriesExcept(const std::string& path, const std::string& exce
         std::string message = std::string{} + "error " + error.what() + " removing directories " + path;
         throw FilesystemError(message);
     }
+}
+
+std::vector<std::string> getSubdirectories(const std::string& path)
+{
+    INFO("path: ", path);
+
+    std::vector<std::string> result;
+    try {
+        namespace bfs = boost::filesystem;
+        bfs::directory_iterator endItr;
+        for(bfs::directory_iterator itr(path); itr != endItr; ++itr)
+        {
+           if(bfs::is_directory(*itr)) {
+               result.emplace_back(itr->path().filename().string());
+           }
+        }
+    }
+    catch(boost::filesystem::filesystem_error& error) {
+        std::string message = std::string{} + "error " + error.what() + " removing directories " + path;
+        throw FilesystemError(message);
+    }
+    return result;
+}
+
+bool isEmpty(const std::string& path)
+{
+    INFO("path: ", path);
+
+    auto result{false};
+    try {
+        result = boost::filesystem::is_empty(path);
+    }
+    catch(boost::filesystem::filesystem_error& error) {
+        std::string message = std::string{} + "error " + error.what() + " while checking if " + path + " is empty";
+        throw FilesystemError(message);
+    }
+    return result;
 }
 
 long getFreeSpace(const std::string& path)
