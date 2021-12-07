@@ -51,6 +51,74 @@ std::string generateHandle()
     return std::to_string(std::rand());
 }
 
+
+// TODO some enhancements
+// - replace type,id,version triplet with AppId - make it less error prone (named arguments?)
+// - create AppConfig that will take Config and encapsulate path creation - at present it's
+//   easy easy to make mistake, similar code is different places
+struct AppId
+{
+    std::string type;
+    std::string id;
+    std::string version;
+};
+
+std::ostream& operator<<(std::ostream& out, const AppId& app)
+{
+    return out << "app[" << app.type << ":" << app.id << ":" << app.version << "]";
+}
+
+std::vector<AppId> scanDirectories(const std::string& appsPath)
+{
+    std::vector<AppId> apps;
+    std::string currentPath;
+
+    auto appsPaths = Filesystem::getSubdirectories(appsPath);
+    for (auto& typePath : appsPaths) {
+
+        currentPath = appsPath + typePath + '/';
+        if (Filesystem::isEmpty(currentPath)) {
+            INFO("empty dir: ", currentPath, " removing");
+            Filesystem::removeDirectory(currentPath);
+            continue;
+        }
+
+        AppId app{};
+        app.type = typePath;
+
+        auto idSubPaths = Filesystem::getSubdirectories(currentPath);
+        for (auto& idSubPath : idSubPaths) {
+
+            currentPath = appsPath + typePath + '/' + idSubPath + '/';
+            if (Filesystem::isEmpty(currentPath)) {
+                INFO("empty dir: ", currentPath, " removing");
+                Filesystem::removeDirectory(currentPath);
+                continue;
+            }
+
+            AppId appId = app;
+            appId.id = idSubPath;
+
+            auto verSubPaths = Filesystem::getSubdirectories(currentPath);
+            for (auto& verSubPath : verSubPaths) {
+
+                currentPath = appsPath + typePath + '/' + idSubPath + '/' + verSubPath + '/';
+                if (Filesystem::isEmpty(currentPath)) {
+                    INFO("empty dir: ", currentPath, " removing");
+                    Filesystem::removeDirectory(currentPath);
+                    continue;
+                }
+
+                AppId appVer = appId;
+                appVer.version = verSubPath;
+
+                apps.emplace_back(appVer);
+            }
+        }
+    }
+    return apps;
+}
+
 } // namespace anonymous
 
 enum ReturnCodes {
@@ -70,6 +138,7 @@ uint32_t Executor::Configure(const std::string& configString)
     try {
         handleDirectories();
         initializeDataBase(config.getDatabasePath());
+        doMaintanace();
         INFO("configuration done");
     } catch (std::exception& error) {
         ERROR("Unable to configure executor: ", error.what());
@@ -88,8 +157,7 @@ uint32_t Executor::Install(const std::string& type,
 {
     INFO("type=", type, " id=", id, " version=", version, " url=", url, " appName=", appName, " cat=", category);
 
-    // TODO what are param requirements?
-    if (false /* checkParams() */ ) {
+    if (type.empty() || id.empty() || version.empty()) {
         handle = "WrongParams";
         return ERROR_WRONG_PARAMS;
     }
@@ -446,7 +514,7 @@ void Executor::doInstall(std::string type,
 
     setProgress(0, OperationStage::FINISHED);
 
-    // TODO invoke maintenace and cleanup
+    doMaintanace();
 
     INFO("finished");
 }
@@ -471,9 +539,77 @@ void Executor::doUninstall(std::string type, std::string id, std::string version
         Filesystem::removeDirectory(appStoragePath);
     }
 
-    // TODO invoke maintenace and cleanup
+    doMaintanace();
 
     INFO("finished");
+}
+
+void Executor::doMaintanace()
+{
+    try {
+        // clear tmp
+        Filesystem::removeDirectory(config.getAppsTmpPath());
+        Filesystem::createDirectory(config.getAppsTmpPath());
+
+        // remove installed apps data not present in installed_apps
+        auto appsPathRoot = config.getAppsPath() + Filesystem::LISA_EPOCH + '/';
+        auto foundApps = scanDirectories(appsPathRoot);
+        for (const auto& app : foundApps) {
+            INFO(app);
+            if (dataBase->IsAppInstalled(app.type, app.id, app.version)) {
+                ERROR(app, " not found in installed apps, removing dir");
+                auto path = config.getAppsPath() + Filesystem::createAppPath(app.type, app.id, app.version);
+                Filesystem::removeDirectory(path);
+            }
+        }
+
+        // remove apps data not present in apps
+        auto appsStoragePathRoot = config.getAppsStoragePath() + Filesystem::LISA_EPOCH + '/';
+        auto foundAppsStorages = scanDirectories(appsStoragePathRoot);
+        for (const auto& app : foundAppsStorages) {
+            INFO(app);
+            if (dataBase->IsAppData(app.type, app.id)) {
+                ERROR(app, " not found in apps, removing dir");
+                auto path = config.getAppsStoragePath() + Filesystem::createAppPath(app.type, app.id);
+                Filesystem::removeDirectory(path);
+            }
+        }
+
+        auto appsDetailsList = dataBase->GetAppDetailsList();
+        for (const auto& details : appsDetailsList) {
+            INFO("details: ", details.id, ":", details.version);
+
+            auto appPaths = dataBase->GetAppsPaths(details.type, details.id, details.version);
+
+            INFO("PATHS APPS:");
+            for (const auto& path : appPaths) {
+                INFO("path: ", path);
+                auto appPath = config.getAppsPath() + path;
+                INFO("abs path: ", appPath);
+
+                bool noAppFiles = Filesystem::directoryExists(appPath) ? Filesystem::isEmpty(appPath) : true;
+                if (noAppFiles) {
+                    dataBase->RemoveInstalledApp(details.type, details.id, details.version);
+                }
+            }
+
+            auto dataPaths = dataBase->GetDataPaths(details.type, details.id);
+
+            INFO("PATHS DATA:");
+            for (const auto& path : dataPaths) {
+                INFO("path: ", path);
+                auto dataPath = config.getAppsStoragePath() + path;
+                INFO("abs path: ", dataPath);
+                if (Filesystem::directoryExists(dataPath)) {
+                    Filesystem::createDirectory(dataPath);
+                }
+            }
+
+        }
+    }
+    catch(std::exception& exc) {
+        ERROR("ERROR: ", exc.what());
+    }
 }
 
 void Executor::setProgress(int progress)

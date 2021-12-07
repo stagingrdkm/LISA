@@ -21,6 +21,7 @@
 
 #include <string>
 #include <stdexcept>
+#include <vector>
 
 namespace WPEFramework {
 namespace Plugin {
@@ -63,6 +64,8 @@ bool directoryExists(const std::string& path);
 bool createDirectory(const std::string& path);
 void removeDirectory(const std::string& path);
 void removeAllDirectoriesExcept(const std::string& path, const std::string& except);
+std::vector<std::string> getSubdirectories(const std::string& path);
+bool isEmpty(const std::string& path);
 
 /**
  * Helper class for temporary directories and rolling back changes.

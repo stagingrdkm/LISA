@@ -111,6 +111,27 @@ namespace { // anonymous
         }
     }
 
+    bool SqlDataStorage::IsAppData(const std::string& type,
+                                   const std::string& id)
+    {
+        INFO(" ");
+        string query = "SELECT idx FROM apps WHERE (?1 IS NULL OR type = ?1) AND (?2 IS NULL OR app_id = ?2)";
+        sqlite3_stmt* stmt;
+        sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
+
+        sqlite3_bind_text(stmt, 1, type.empty() ? nullptr : type.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, id.empty() ? nullptr : id.c_str(), -1, SQLITE_TRANSIENT);
+        int rc = sqlite3_step(stmt);
+        sqlite3_finalize(stmt);
+        if (rc == SQLITE_ROW) {
+            return true;
+        } else if (rc == SQLITE_DONE) {
+            return false;
+        } else {
+            throw SqlDataStorageError(std::string{"sqlite error: "} + sqlite3_errmsg(sqlite));
+        }
+    }
+
     void SqlDataStorage::RemoveInstalledApp(const std::string& type,
                                             const std::string& id,
                                             const std::string& version)
