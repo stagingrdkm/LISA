@@ -556,7 +556,7 @@ void Executor::doMaintanace()
         auto foundApps = scanDirectories(appsPathRoot);
         for (const auto& app : foundApps) {
             INFO(app);
-            if (dataBase->IsAppInstalled(app.type, app.id, app.version)) {
+            if (!dataBase->IsAppInstalled(app.type, app.id, app.version)) {
                 ERROR(app, " not found in installed apps, removing dir");
                 auto path = config.getAppsPath() + Filesystem::createAppPath(app.type, app.id, app.version);
                 Filesystem::removeDirectory(path);
@@ -568,7 +568,7 @@ void Executor::doMaintanace()
         auto foundAppsStorages = scanDirectories(appsStoragePathRoot);
         for (const auto& app : foundAppsStorages) {
             INFO(app);
-            if (dataBase->IsAppData(app.type, app.id)) {
+            if (!dataBase->IsAppData(app.type, app.id)) {
                 ERROR(app, " not found in apps, removing dir");
                 auto path = config.getAppsStoragePath() + Filesystem::createAppPath(app.type, app.id);
                 Filesystem::removeDirectory(path);
@@ -600,7 +600,7 @@ void Executor::doMaintanace()
                 INFO("path: ", path);
                 auto dataPath = config.getAppsStoragePath() + path;
                 INFO("abs path: ", dataPath);
-                if (Filesystem::directoryExists(dataPath)) {
+                if (!Filesystem::directoryExists(dataPath)) {
                     Filesystem::createDirectory(dataPath);
                 }
             }
