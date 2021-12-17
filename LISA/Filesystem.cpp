@@ -21,6 +21,7 @@
 #include "Debug.h"
 
 #include <boost/filesystem.hpp>
+#include <unistd.h>
 
 namespace WPEFramework {
 namespace Plugin {
@@ -164,6 +165,49 @@ std::vector<std::string> getSubdirectories(const std::string& path)
         throw FilesystemError(message);
     }
     return result;
+}
+
+void setPermission(const std::string& path, int uid, int gid, bool isdir, bool group_writeable)
+{
+    if (chown(path.c_str(), uid, gid)) {
+        ERROR("Could not change owner of ", path);
+    }
+
+    try {
+        auto perms = boost::filesystem::owner_read | boost::filesystem::owner_write | boost::filesystem::group_read;
+        if (isdir) {
+            perms |= boost::filesystem::owner_exe;
+            perms |= boost::filesystem::group_exe;
+        }
+        if (group_writeable) {
+            perms |= boost::filesystem::group_write;
+        }
+        //INFO("Changing permissions for ", path);
+        boost::filesystem::permissions(path, perms);
+    }
+    catch(boost::filesystem::filesystem_error& error) {
+        ERROR("Could not set permissions on ", path, " error: ", error.what());
+    }
+}
+
+void setPermissionsRecursively(const std::string& path, int gid, bool writeable)
+{
+    INFO("setPermissionsRecursively: ", path, " ", gid);
+
+    int uid = getuid();
+    setPermission(path, uid, gid, true, writeable);
+    try {
+        namespace bfs = boost::filesystem;
+        bfs::recursive_directory_iterator endItr;
+        for(bfs::recursive_directory_iterator itr(path); itr != endItr; ++itr)
+        {
+           setPermission(itr->path().string(), uid, gid, bfs::is_directory(*itr), writeable);
+        }
+    }
+    catch(boost::filesystem::filesystem_error& error) {
+        std::string message = std::string{} + "error " + error.what() + " setting permissions " + path;
+        throw FilesystemError(message);
+    }
 }
 
 bool isEmpty(const std::string& path)

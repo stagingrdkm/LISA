@@ -606,6 +606,14 @@ void Executor::doMaintanace()
             }
 
         }
+
+#if LISA_APPS_GID
+        Filesystem::setPermissionsRecursively(config.getAppsPath(), LISA_APPS_GID, false);
+#endif
+#if LISA_DATA_GID
+        Filesystem::setPermissionsRecursively(config.getAppsStoragePath(), LISA_DATA_GID, true);
+#endif
+
     }
     catch(std::exception& exc) {
         ERROR("ERROR: ", exc.what());

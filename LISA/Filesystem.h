@@ -65,6 +65,8 @@ bool createDirectory(const std::string& path);
 void removeDirectory(const std::string& path);
 void removeAllDirectoriesExcept(const std::string& path, const std::string& except);
 std::vector<std::string> getSubdirectories(const std::string& path);
+void setPermission(const std::string& path, int uid, int gid, bool isdir, bool writeable);
+void setPermissionsRecursively(const std::string& path, int gid, bool writeable);
 bool isEmpty(const std::string& path);
 
 /**

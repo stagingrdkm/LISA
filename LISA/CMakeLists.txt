@@ -43,6 +43,14 @@ set_target_properties(${MODULE_NAME} PROPERTIES
         CXX_STANDARD 11
         CXX_STANDARD_REQUIRED YES)
 
+if (PLUGIN_LISA_APPS_GID)
+  add_definitions(-DLISA_APPS_GID=${PLUGIN_LISA_APPS_GID})
+endif (PLUGIN_LISA_APPS_GID)
+
+if (PLUGIN_LISA_DATA_GID)
+  add_definitions(-DLISA_DATA_GID=${PLUGIN_LISA_DATA_GID})
+endif (PLUGIN_LISA_DATA_GID)
+
 add_subdirectory(AuthModule)
 
 target_link_libraries(${MODULE_NAME}
