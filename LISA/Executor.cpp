@@ -68,7 +68,7 @@ std::ostream& operator<<(std::ostream& out, const AppId& app)
     return out << "app[" << app.type << ":" << app.id << ":" << app.version << "]";
 }
 
-std::vector<AppId> scanDirectories(const std::string& appsPath)
+std::vector<AppId> scanDirectories(const std::string& appsPath, bool scanDataStorage)
 {
     std::vector<AppId> apps;
     std::string currentPath;
@@ -99,20 +99,24 @@ std::vector<AppId> scanDirectories(const std::string& appsPath)
             AppId appId = app;
             appId.id = idSubPath;
 
-            auto verSubPaths = Filesystem::getSubdirectories(currentPath);
-            for (auto& verSubPath : verSubPaths) {
+            if (scanDataStorage) {
+                apps.emplace_back(appId);
+            } else {
+                auto verSubPaths = Filesystem::getSubdirectories(currentPath);
+                for (auto& verSubPath : verSubPaths) {
 
-                currentPath = appsPath + typePath + '/' + idSubPath + '/' + verSubPath + '/';
-                if (Filesystem::isEmpty(currentPath)) {
-                    INFO("empty dir: ", currentPath, " removing");
-                    Filesystem::removeDirectory(currentPath);
-                    continue;
+                    currentPath = appsPath + typePath + '/' + idSubPath + '/' + verSubPath + '/';
+                    if (Filesystem::isEmpty(currentPath)) {
+                        INFO("empty dir: ", currentPath, " removing");
+                        Filesystem::removeDirectory(currentPath);
+                        continue;
+                    }
+
+                    AppId appVer = appId;
+                    appVer.version = verSubPath;
+
+                    apps.emplace_back(appVer);
                 }
-
-                AppId appVer = appId;
-                appVer.version = verSubPath;
-
-                apps.emplace_back(appVer);
             }
         }
     }
@@ -138,7 +142,7 @@ uint32_t Executor::Configure(const std::string& configString)
     try {
         handleDirectories();
         initializeDataBase(config.getDatabasePath());
-        doMaintanace();
+        doMaintenance();
         INFO("configuration done");
     } catch (std::exception& error) {
         ERROR("Unable to configure executor: ", error.what());
@@ -514,7 +518,7 @@ void Executor::doInstall(std::string type,
 
     setProgress(0, OperationStage::FINISHED);
 
-    doMaintanace();
+    doMaintenance();
 
     INFO("finished");
 }
@@ -534,17 +538,17 @@ void Executor::doUninstall(std::string type, std::string id, std::string version
 
     if (uninstallType == "full") {
         dataBase->RemoveAppData(type, id);
-        auto appStoragePath = config.getAppsStoragePath() + appSubPath;
+        auto appStoragePath = config.getAppsStoragePath() + Filesystem::createAppPath(type, id);
         INFO("removing storage directory ", appStoragePath);
         Filesystem::removeDirectory(appStoragePath);
     }
 
-    doMaintanace();
+    doMaintenance();
 
     INFO("finished");
 }
 
-void Executor::doMaintanace()
+void Executor::doMaintenance()
 {
     try {
         // clear tmp
@@ -553,7 +557,7 @@ void Executor::doMaintanace()
 
         // remove installed apps data not present in installed_apps
         auto appsPathRoot = config.getAppsPath() + Filesystem::LISA_EPOCH + '/';
-        auto foundApps = scanDirectories(appsPathRoot);
+        auto foundApps = scanDirectories(appsPathRoot, false);
         for (const auto& app : foundApps) {
             INFO(app);
             if (!dataBase->IsAppInstalled(app.type, app.id, app.version)) {
@@ -565,7 +569,7 @@ void Executor::doMaintanace()
 
         // remove apps data not present in apps
         auto appsStoragePathRoot = config.getAppsStoragePath() + Filesystem::LISA_EPOCH + '/';
-        auto foundAppsStorages = scanDirectories(appsStoragePathRoot);
+        auto foundAppsStorages = scanDirectories(appsStoragePathRoot, true);
         for (const auto& app : foundAppsStorages) {
             INFO(app);
             if (!dataBase->IsAppData(app.type, app.id)) {
