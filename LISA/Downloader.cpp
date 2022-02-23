@@ -70,16 +70,19 @@ Downloader::Downloader(const std::string& uri,
     INFO("Downloader created, uri: ", uri);
 }
 
-long Downloader::getContentLength()
+// returns 0 if error or content length unknown
+unsigned long long Downloader::getContentLength()
 {
     curl_easy_setopt(curl.get(), CURLOPT_NOBODY, 1);
 
     performAction();
 
     curl_off_t curlContentLength{};
-    curl_easy_getinfo(curl.get(), CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &curlContentLength);
-
-    return static_cast<long>(curlContentLength);
+    auto res = curl_easy_getinfo(curl.get(), CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &curlContentLength);
+    if (res == CURLE_OK && curlContentLength != -1)
+      return static_cast<unsigned long long>(curlContentLength);
+    else
+      return 0;
 }
 
 void Downloader::get(const std::string& destination)

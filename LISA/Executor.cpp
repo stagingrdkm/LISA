@@ -264,7 +264,7 @@ uint32_t Executor::GetStorageDetails(const std::string& type,
         } else {
             INFO("Calculating usage for: type = ", type, " id = ", id, " version = ", version);
             std::vector<std::string> appsPaths = dataBase->GetAppsPaths(type, id, version);
-            long appUsedKB{};
+            unsigned long long appUsedKB{};
             // In Stage 1 there will be only one entry here
             for(const auto& i: appsPaths)
             {
@@ -272,7 +272,7 @@ uint32_t Executor::GetStorageDetails(const std::string& type,
                 appUsedKB += fs::getDirectorySpace(details.appPath);
             }
             std::vector<std::string> dataPaths = dataBase->GetDataPaths(type, id);
-            long persistentUsedKB{};
+            unsigned long long persistentUsedKB{};
             for(const auto& i: dataPaths)
             {
                 details.persistentPath = config.getAppsStoragePath() + i;
@@ -481,13 +481,17 @@ void Executor::doInstall(std::string type,
     Downloader downloader{url, *this};
 
     auto downloadSize = downloader.getContentLength();
+    if (downloadSize == 0) {
+        std::string message = std::string{} + "app download size unknown or could not be determined";
+        throw std::runtime_error(message);
+    }
     auto tmpFreeSpace = Filesystem::getFreeSpace(tmpDirPath);
 
-    INFO("download size: ", downloadSize, " free tmp space: ", tmpFreeSpace);
+    INFO("download size: ", downloadSize / 1024, " Kb, free tmp space: ", tmpFreeSpace / 1024, " Kb");
 
     if (downloadSize > tmpFreeSpace) {
         std::string message = std::string{} + "not enough space on " + tmpPath + " (available: "
-                + std::to_string(tmpFreeSpace) +", required: " + std::to_string(downloadSize) + ")";
+                + std::to_string(tmpFreeSpace / 1024) +" Kb, required: " + std::to_string(downloadSize / 1024) + " Kb)";
         throw std::runtime_error(message);
     }
 
