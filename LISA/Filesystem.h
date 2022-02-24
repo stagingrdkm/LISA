@@ -90,8 +90,8 @@ private:
     std::string dirToRemove{};
 };
 
-long getFreeSpace(const std::string& path);
-long getDirectorySpace(const std::string& path);
+unsigned long long getFreeSpace(const std::string& path);
+unsigned long long getDirectorySpace(const std::string& path);
 
 } // namespace Filesystem
 } // namespace LISA

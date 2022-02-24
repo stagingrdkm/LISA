@@ -70,7 +70,8 @@ public:
     Downloader(const Downloader& other) = delete;
     Downloader& operator=(const Downloader& other) = delete;
 
-    long getContentLength();
+    // returns 0 if error or content length  unknown
+    unsigned long long getContentLength();
     void get(const std::string& destination);
 
 private:

@@ -225,9 +225,9 @@ bool isEmpty(const std::string& path)
     return result;
 }
 
-long getFreeSpace(const std::string& path)
+unsigned long long getFreeSpace(const std::string& path)
 {
-    long freeSpace{};
+    unsigned long long freeSpace{};
 
     try {
         auto boostSpace = boost::filesystem::space(path);
@@ -241,9 +241,9 @@ long getFreeSpace(const std::string& path)
     return freeSpace;
 }
 
-long getDirectorySpace(const std::string& path)
+unsigned long long getDirectorySpace(const std::string& path)
 {
-    long space{};
+    uintmax_t space{};
     namespace bf = boost::filesystem;
     try {
         if(directoryExists(path)) {
@@ -259,7 +259,7 @@ long getDirectorySpace(const std::string& path)
         std::string message = std::string{} + "error " + error.what() + " reading directory space on " + path;
         throw FilesystemError(message);
     }
-    return space;
+    return (unsigned long long)space;
 }
 
 } // namespace Filesystem
