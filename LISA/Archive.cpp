@@ -72,9 +72,11 @@ public:
             if (readHeaderResult == ARCHIVE_EOF) {
                 INFO("archive read successfully");
                 break;
-            } else if (readHeaderResult != ARCHIVE_OK) {
+            } else if (readHeaderResult != ARCHIVE_OK && readHeaderResult != ARCHIVE_WARN) {
                 std::string message = std::string{} + "error while reading entry " + archive_error_string(theArchive);
                 throw ArchiveError(message);
+            } else if (readHeaderResult == ARCHIVE_WARN) {
+                INFO("Warning while reading entry ", archive_error_string(theArchive));
             }
 
             std::string destPath{destination + archive_entry_pathname(entry)};
@@ -87,8 +89,11 @@ public:
             }
 
             auto extractStatus = archive_read_extract(theArchive, entry, flags);
-            if (extractStatus == ARCHIVE_OK) {
+            if (extractStatus == ARCHIVE_OK || extractStatus == ARCHIVE_WARN) {
                 INFO("extracted: ", archive_entry_pathname(entry));
+                if (extractStatus == ARCHIVE_WARN) {
+                    INFO("Warning while extracting ", archive_error_string(theArchive));
+                }
             } else {
                 std::string message = std::string{} + "error while extracting " + archive_error_string(theArchive);
                 throw ArchiveError(message);
