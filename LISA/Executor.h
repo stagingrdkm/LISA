@@ -46,7 +46,8 @@ class Executor : private DownloaderListener
 public:
     enum class OperationStatus {
         SUCCESS,
-        FAILED
+        FAILED,
+        PROGRESS
     };
 
     using OperationStatusCallback = std::function<void (std::string, OperationStatus, std::string)> ;

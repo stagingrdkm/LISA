@@ -642,11 +642,20 @@ void Executor::setProgress(int stagePercent, OperationStage stage)
 {
     int stageIndex = enumToInt(stage);
     int resultPercent = stageBase[stageIndex] + (static_cast<int>(stagePercent * stageFactor[stageIndex]));
+    static int prevResultPercent = -1;
 
-    INFO("overall: ", resultPercent, "% from stage: ", stage, " progress: ", stagePercent, "%", " ");
+    if (resultPercent == prevResultPercent)
+      return;
+    prevResultPercent = resultPercent;
+
+    INFO("overall: ", resultPercent, "% from stage: ", stage, " progress: ", stagePercent, "%");
 
     LockGuard lock{taskMutex};
     currentTask.progress = resultPercent;
+
+    std::stringstream ss;
+    ss << stage << " " << resultPercent << " %";
+    operationStatusCallback(currentTask.handle, OperationStatus::PROGRESS, ss.str());
 }
 
 std::ostream& operator<<(std::ostream& out, const Executor::Task& task)
@@ -667,7 +676,7 @@ std::ostream& operator<<(std::ostream& out, Executor::OperationStage stage)
 
 std::ostream& operator<<(std::ostream& out, const Executor::OperationStatus& status)
 {
-    return out << (status == Executor::OperationStatus::SUCCESS ? "SUCCESS" : "FAILED") ;
+    return out << (status == Executor::OperationStatus::SUCCESS ? "SUCCESS" : status == Executor::OperationStatus::PROGRESS ? "PROGRESS" : "FAILED") ;
 }
 
 } // namespace LISA
