@@ -478,7 +478,7 @@ private:
             const LISA::Executor::OperationStatus& status,
             const std::string& details)
     {
-        INFO("LISA onOperationStatus handle:", handle, "status: ", status, " details: ", details);
+        INFO("LISA onOperationStatus handle:", handle, " status: ", status, " details: ", details);
         std::string statusStr;
         switch (status)
         {
@@ -487,6 +487,9 @@ private:
                 break;
             case LISA::Executor::OperationStatus::FAILED:
                 statusStr = "Failed";
+                break;
+            case LISA::Executor::OperationStatus::PROGRESS:
+                statusStr = "Progress";
                 break;
         }
 
