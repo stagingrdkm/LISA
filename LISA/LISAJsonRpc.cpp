@@ -113,17 +113,18 @@ namespace Plugin {
                 return errorCode;
             });
 
-        module.Register<ResetParamsData,void>(_T("reset"),
-            [destination, this](const ResetParamsData& params) -> uint32_t
+        module.Register<ResetParamsData,Core::JSON::String>(_T("reset"),
+            [destination, this](const ResetParamsData& params, Core::JSON::String& response) -> uint32_t
             {
                 uint32_t errorCode = Core::ERROR_NONE;
                 INFO("Reset");
-
+                std::string result{};
                 errorCode = destination->Reset(
                     params.Type.Value(),
                     params.Id.Value(),
                     params.Version.Value(),
                     params.ResetType.Value());
+                response = result;
 
                 INFO("Reset finished with code: ", errorCode);
                 return errorCode;
@@ -313,14 +314,15 @@ namespace Plugin {
                 return errorCode;
             });
 
-        module.Register<CancelParamsInfo,void>(_T("cancel"),
-            [destination, this](const CancelParamsInfo& params) -> uint32_t
+        module.Register<CancelParamsInfo,Core::JSON::String>(_T("cancel"),
+            [destination, this](const CancelParamsInfo& params, Core::JSON::String& response) -> uint32_t
             {
                 uint32_t errorCode = Core::ERROR_NONE;
                 INFO("Cancel");
-
+                std::string result{};
                 errorCode = destination->Cancel(
                     params.Handle.Value());
+                response = result;
 
                 INFO("Cancel finished with code: ", errorCode);
                 return errorCode;
