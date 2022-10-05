@@ -97,12 +97,11 @@ namespace Plugin {
         return (string());
     }
 
-    void LISA::OperationStatus(const std::string& handle,
-                        const std::string& status,
-                        const std::string& details)
+    void LISA::OperationStatus(const string& handle, const string& operation, const string& type, const string& id,
+                               const string& version, const string& status, const string& details)
     {
         INFO("handle: ", handle, " status: ", status, " details: ", details);
-        SendEventOperationStatus(*this, handle, status, details);
+        SendEventOperationStatus(*this, handle, operation, type, id, version, status, details);
     }
 
     void LISA::Deactivated(RPC::IRemoteConnection* connection)

@@ -61,6 +61,108 @@ public:
         return executor.Uninstall(type, id, version, uninstallType, handle);
     }
 
+    class HandleResultImpl : public ILISA::IHandleResult
+    {
+    public:
+        HandleResultImpl() = delete;
+        HandleResultImpl(const HandleResultImpl&) = delete;
+        HandleResultImpl& operator=(const HandleResultImpl&) = delete;
+
+        HandleResultImpl(const std::string handle)
+                : _handle(handle)
+        {
+        }
+
+        ~HandleResultImpl() override
+        {
+        }
+
+        uint32_t Handle(std::string& handle) const override
+        {
+            handle = _handle;
+            return Core::ERROR_NONE;
+        }
+
+    private:
+        std::string _handle;
+
+    public:
+        BEGIN_INTERFACE_MAP(HandleResultImpl)
+        INTERFACE_ENTRY(Exchange::ILISA::IHandleResult)
+        END_INTERFACE_MAP
+    }; // class HandleResultImpl
+
+    uint32_t Lock(const std::string& type,
+                  const std::string& id,
+                  const std::string& version,
+                  const std::string& reason,
+                  const std::string& owner,
+                  ILISA::IHandleResult*& result  /* @out */) override
+    {
+        std::string handle;
+        auto error = executor.Lock(type, id, version, reason, owner, handle);
+        result = Core::Service<HandleResultImpl>::Create<ILISA::IHandleResult>(
+                handle
+        );
+        return error;
+    }
+
+    uint32_t Unlock(const std::string& handle) override
+    {
+        return executor.Unlock(handle);
+    }
+
+    class LockInfoImpl : public ILISA::ILockInfo
+    {
+    public:
+        LockInfoImpl() = delete;
+        LockInfoImpl(const LockInfoImpl&) = delete;
+        LockInfoImpl& operator=(const LockInfoImpl&) = delete;
+
+        LockInfoImpl(const std::string reason, const std::string owner)
+                : _reason(reason), _owner(owner)
+        {
+        }
+
+        ~LockInfoImpl() override
+        {
+        }
+
+        uint32_t Reason(std::string& reason) const override
+        {
+            reason = _reason;
+            return Core::ERROR_NONE;
+        }
+
+        uint32_t Owner(std::string& owner) const override
+        {
+            owner = _owner;
+            return Core::ERROR_NONE;
+        }
+
+    private:
+        std::string _reason;
+        std::string _owner;
+
+    public:
+        BEGIN_INTERFACE_MAP(LockInfoImpl)
+        INTERFACE_ENTRY(Exchange::ILISA::ILockInfo)
+        END_INTERFACE_MAP
+    }; // class LockInfoImpl
+
+    uint32_t GetLockInfo(const std::string& type,
+                         const std::string& id,
+                         const std::string& version,
+                         ILISA::ILockInfo*& result) override
+    {
+        std::string reason, owner;
+        auto error = executor.GetLockInfo(type, id, version, reason, owner);
+        result = Core::Service<LockInfoImpl>::Create<ILISA::ILockInfo>(
+                reason, owner
+        );
+        return error;
+    }
+
     uint32_t Download(const std::string& type,
             const std::string& id,
             const std::string& version,
@@ -473,29 +575,12 @@ public:
     }
 
 private:
-    void onOperationStatus(
-            const std::string& handle,
-            const LISA::Executor::OperationStatus& status,
-            const std::string& details)
+    void onOperationStatus(const LISA::Executor::OperationStatusEvent& event)
     {
-        INFO("LISA onOperationStatus handle:", handle, " status: ", status, " details: ", details);
-        std::string statusStr;
-        switch (status)
-        {
-            case LISA::Executor::OperationStatus::SUCCESS:
-                statusStr = "Success";
-                break;
-            case LISA::Executor::OperationStatus::FAILED:
-                statusStr = "Failed";
-                break;
-            case LISA::Executor::OperationStatus::PROGRESS:
-                statusStr = "Progress";
-                break;
-        }
-
+        INFO("LISA onOperationStatus handle:", event.handle, " status: ", event.status, " details: ", event.details);
         LockGuard lock(notificationMutex);
         for(const auto index: _notificationCallbacks) {
-            index->operationStatus(handle, statusStr, details);
+            index->operationStatus(event.handle, event.operationStr(), event.type, event.id, event.version, event.statusStr(), event.details);
         }
     }
 
@@ -876,9 +961,9 @@ public:
 
 private:
     LISA::Executor executor{
-        [this](std::string handle, LISA::Executor::OperationStatus status, std::string details)
+        [this](const LISA::Executor::OperationStatusEvent& event)
         {
-            this->onOperationStatus(handle, status, details);
+            this->onOperationStatus(event);
         }
     };
     using LockGuard = std::lock_guard<std::mutex>;
