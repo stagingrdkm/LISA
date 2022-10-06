@@ -32,6 +32,8 @@
 #include <string>
 #include <vector>
 #include <thread>
+#include <tuple>
+#include <map>
 
 namespace WPEFramework {
 namespace Plugin {
@@ -47,10 +49,54 @@ public:
     enum class OperationStatus {
         SUCCESS,
         FAILED,
-        PROGRESS
+        PROGRESS,
+        CANCELLED
     };
-
-    using OperationStatusCallback = std::function<void (std::string, OperationStatus, std::string)> ;
+    enum class OperationType {
+        INSTALLING,
+        UNINSTALLING
+    };
+    struct OperationStatusEvent {
+        string handle, type, id, version, details;
+        OperationType operation;
+        OperationStatus status;
+        OperationStatusEvent() {}
+        OperationStatusEvent(const string& handle_, const LISA::Executor::OperationType& operation_, const string& type_, const string& id_,
+                             const string& version_, const LISA::Executor::OperationStatus& status_, const string& details_) :
+                             handle(handle_), type(type_), id(id_), version(version_), details(details_), operation(operation_), status(status_)
+                             {}
+        static string statusStr(const LISA::Executor::OperationStatus& status) {
+            switch (status)
+            {
+                case LISA::Executor::OperationStatus::SUCCESS:
+                    return "Success";
+                case LISA::Executor::OperationStatus::FAILED:
+                    return "Failed";
+                case LISA::Executor::OperationStatus::PROGRESS:
+                    return "Progress";
+                case LISA::Executor::OperationStatus::CANCELLED:
+                    return "Cancelled";
+            }
+            return "";
+        }
+        string statusStr() const {
+            return OperationStatusEvent::statusStr(status);
+        }
+        static string operationStr(const LISA::Executor::OperationType& operation) {
+            switch (operation)
+            {
+                case LISA::Executor::OperationType::INSTALLING:
+                    return "Installing";
+                case LISA::Executor::OperationType::UNINSTALLING:
+                    return "Uninstalling";
+            }
+            return "";
+        }
+        string operationStr() const {
+            return OperationStatusEvent::operationStr(operation);
+        }
+    };
+    using OperationStatusCallback = std::function<void (const OperationStatusEvent& event)> ;
 
     Executor(OperationStatusCallback callback) :
         operationStatusCallback(callback)
@@ -72,6 +118,21 @@ public:
             const std::string& version,
             const std::string& uninstallType,
             std::string& handle);
+
+    uint32_t Lock(const std::string& type,
+                       const std::string& id,
+                       const std::string& version,
+                       const std::string& reason,
+                       const std::string& owner,
+                       std::string& handle);
+
+    uint32_t Unlock(const std::string& handle);
+
+    uint32_t GetLockInfo(const std::string& type,
+                         const std::string& id,
+                         const std::string& version,
+                         std::string &reason,
+                         std::string &owner);
 
     uint32_t GetProgress(const std::string& handle, std::uint32_t& progress);
 
@@ -125,6 +186,10 @@ private:
     void initializeDataBase(const std::string& dbpath);
 
     bool isWorkerBusy() const;
+    bool isWorkerBusy(const std::string& type,
+                      const std::string& id,
+                      const std::string& version) const;
+
     void executeTask(std::function<void()> task);
     void taskRunner(std::function<void()> task);
 
@@ -163,7 +228,8 @@ private:
             progress = 0;
             cancelled.store(false);
         }
-        std::string handle{};
+        std::string handle{}, type, id, version;
+        OperationType operation{OperationType::INSTALLING};
         int progress{0};
         std::atomic_bool cancelled{false};
     };
@@ -171,6 +237,10 @@ private:
     std::thread worker{};
     std::mutex taskMutex{};
     OperationStatusCallback operationStatusCallback;
+
+    typedef std::tuple<std::string, std::string, std::string> appkey; // type, id, version
+    typedef std::tuple<std::string, std::string, std::string> applock; // reason, owner, handle
+    std::map<appkey, applock> lockedApps;
 
     Config config{};
 

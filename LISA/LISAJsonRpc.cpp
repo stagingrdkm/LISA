@@ -94,6 +94,84 @@ namespace Plugin {
                 return errorCode;
             });
 
+        // For some reason JsonGenerator doesn't generate separate ParamsInfo/ParamsData
+        // classes for functions that have the same input params. Re-use other class.
+        using HandleResultData = CancelParamsInfo;
+        module.Register<LockParamsData,HandleResultData>(_T("lock"),
+            [destination, this](const LockParamsData& params, HandleResultData& response) -> uint32_t
+            {
+                uint32_t errorCode = Core::ERROR_NONE;
+                std::string val;
+                Exchange::ILISA::IHandleResult* result;
+
+                INFO("Lock");
+
+                errorCode = destination->Lock(
+                        params.Type.Value(),
+                        params.Id.Value(),
+                        params.Version.Value(),
+                        params.Reason.Value(),
+                        params.Owner.Value(),
+                        result);
+                if (errorCode != Core::ERROR_NONE) {
+                    ERROR("LISAJsonRpc Lock() result: ", errorCode);
+                    return errorCode;
+                }
+
+                result->Handle(val);
+                response.Handle = Core::ToString(val);
+
+                INFO("Lock finished with code: ", errorCode);
+                return errorCode;
+            });
+
+        // For some reason JsonGenerator doesn't generate separate ParamsInfo/ParamsData
+        // classes for functions that have the same input params. Re-use other class.
+        using UnlockParamsData = CancelParamsInfo;
+        module.Register<UnlockParamsData,Core::JSON::Container>(_T("unlock"),
+            [destination, this](const UnlockParamsData& params, Core::JSON::Container& response) -> uint32_t
+            {
+               uint32_t errorCode = Core::ERROR_NONE;
+               INFO("Unlock");
+
+               errorCode = destination->Unlock(
+                       params.Handle.Value());
+
+               INFO("Unlock finished with code: ", errorCode);
+               return errorCode;
+            });
+
+        // For some reason JsonGenerator doesn't generate separate ParamsInfo/ParamsData
+        // classes for functions that have the same input params. Re-use other class.
+        using GetLockInfoParamsInfo = GetStorageDetailsParamsInfo;
+        module.Register<GetLockInfoParamsInfo,LockinfoData>(_T("getLockInfo"),
+             [destination, this](const GetLockInfoParamsInfo& params, LockinfoData& response) -> uint32_t
+             {
+                 uint32_t errorCode = Core::ERROR_NONE;
+                 std::string val;
+                 Exchange::ILISA::ILockInfo* result;
+
+                 INFO("GetLockInfo");
+
+                 errorCode = destination->GetLockInfo(
+                         params.Type.Value(),
+                         params.Id.Value(),
+                         params.Version.Value(),
+                         result);
+                 if (errorCode != Core::ERROR_NONE) {
+                     ERROR("LISAJsonRpc GetLockInfo() result: ", errorCode);
+                     return errorCode;
+                 }
+
+                 result->Reason(val);
+                 response.Reason = Core::ToString(val);
+                 result->Owner(val);
+                 response.Owner = Core::ToString(val);
+
+                 INFO("GetLockInfo finished with code: ", errorCode);
+                 return errorCode;
+             });
+
         module.Register<DownloadParamsData,Core::JSON::String>(_T("download"),
             [destination, this](const DownloadParamsData& params, Core::JSON::String& response) -> uint32_t
             {
@@ -443,12 +521,21 @@ namespace Plugin {
         module.Unregister(_T("getMetadata"));
         module.Unregister(_T("getProgress"));
         module.Unregister(_T("getList"));
+        module.Unregister(_T("lock"));
+        module.Unregister(_T("unlock"));
+        module.Unregister(_T("getLockInfo"));
     }
 
-    void LISA::SendEventOperationStatus(PluginHost::JSONRPC& module, const string& handle, const string& status, const string& details)
+    void LISA::SendEventOperationStatus(PluginHost::JSONRPC& module, const string& handle, const string& operation,
+                                        const string& type, const string& id,
+                                        const string& version, const string& status, const string& details)
     {
         OperationStatusParamsData params;
         params.Handle = handle;
+        params.Operation = operation;
+        params.Type = type;
+        params.Id = id;
+        params.Version = version;
         params.Status = status;
         params.Details = details;
 

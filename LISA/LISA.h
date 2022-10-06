@@ -48,11 +48,10 @@ class LISA : public PluginHost::IPlugin, public PluginHost::JSONRPC {
                 }
 
             public:
-                void operationStatus(const std::string& handle,
-                        const std::string& status,
-                        const std::string& details) override
+                void operationStatus(const string& handle, const string& operation, const string& type, const string& id,
+                                     const string& version, const string& status, const string& details) override
                 {
-                    _parent.OperationStatus(handle, status, details);
+                    _parent.OperationStatus(handle, operation, type, id, version, status, details);
                 }
 
                 void Activated(RPC::IRemoteConnection* /* connection */) override
@@ -93,7 +92,8 @@ class LISA : public PluginHost::IPlugin, public PluginHost::JSONRPC {
 
     private:
         void Deactivated(RPC::IRemoteConnection* connection);
-        void OperationStatus(const string& handle, const string& status, const string& details);
+        void OperationStatus(const string& handle, const string& operation, const string& type, const string& id,
+                             const string& version, const string& status, const string& details);
 
     public:
         //   IPlugin methods
@@ -116,7 +116,9 @@ class LISA : public PluginHost::IPlugin, public PluginHost::JSONRPC {
     private:
         void Register(PluginHost::JSONRPC& module, Exchange::ILISA* destination);
         void Unregister(PluginHost::JSONRPC& module);
-        void SendEventOperationStatus(PluginHost::JSONRPC& module, const string& handle, const string& status, const string& details);
+        void SendEventOperationStatus(PluginHost::JSONRPC& module, const string& handle, const string& operation,
+                                      const string& type, const string& id,
+                                      const string& version, const string& status, const string& details);
     };
 }
 }

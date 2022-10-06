@@ -30,6 +30,7 @@
 #include <array>
 #include <cassert>
 #include <random>
+#include <ctime>
 
 namespace WPEFramework {
 namespace Plugin {
@@ -48,6 +49,11 @@ std::string extractFilename(const std::string& uri)
 
 std::string generateHandle()
 {
+    static bool seeded{false};
+    if (!seeded) {
+        seeded = true;
+        std::srand(std::time(nullptr));
+    }
     return std::to_string(std::rand());
 }
 
@@ -131,6 +137,9 @@ enum ReturnCodes {
     ERROR_WRONG_PARAMS = 1001,
     ERROR_TOO_MANY_REQUESTS = 1002,
     ERROR_ALREADY_INSTALLED = 1003,
+    ERROR_WRONG_HANDLE = 1007,
+    ERROR_APP_LOCKED = 1009,
+    ERROR_APP_UNINSTALLING = 1010
 };
 
 uint32_t Executor::Configure(const std::string& configString)
@@ -178,6 +187,10 @@ uint32_t Executor::Install(const std::string& type,
     }
 
     currentTask.handle = generateHandle();
+    currentTask.operation = OperationType::INSTALLING;
+    currentTask.type = type;
+    currentTask.id = id;
+    currentTask.version = version;
 
     executeTask([=] {
         INFO("executing doInstall");
@@ -215,7 +228,16 @@ uint32_t Executor::Uninstall(const std::string& type,
         return ERROR_TOO_MANY_REQUESTS;
     }
 
+    if (lockedApps.count({type, id, version}) == 1) {
+        handle = "AppLocked";
+        return ERROR_APP_LOCKED;
+    }
+
     currentTask.handle = generateHandle();
+    currentTask.operation = OperationType::UNINSTALLING;
+    currentTask.type = type;
+    currentTask.id = id;
+    currentTask.version = version;
 
     executeTask([=] {
         INFO("executing doUninstall");
@@ -224,6 +246,81 @@ uint32_t Executor::Uninstall(const std::string& type,
 
     handle = currentTask.handle;
     return ERROR_NONE;
+}
+
+uint32_t Executor::Lock(const std::string& type,
+                        const std::string& id,
+                        const std::string& version,
+                        const std::string& reason,
+                        const std::string& owner,
+                        std::string& handle)
+{
+    INFO("Lock type=", type, " id=", id, " version=", version);
+
+    if (!isAppInstalled(type, id, version)) {
+        return ERROR_WRONG_PARAMS;
+    }
+
+    LockGuard lock(taskMutex);
+    if (isWorkerBusy(type, id, version)) {
+        if (currentTask.operation == OperationType::UNINSTALLING)
+            return ERROR_APP_UNINSTALLING;
+        else
+            return ERROR_TOO_MANY_REQUESTS;
+    }
+
+    if (lockedApps.count({type, id, version}) == 0) {
+        handle = generateHandle();
+        INFO("Locked handle=", handle, " reason=", reason, " owner=", owner);
+        lockedApps[{type, id, version}] = {reason, owner, handle};
+        return ERROR_NONE;
+    } else {
+        INFO("Already locked");
+        return ERROR_APP_LOCKED;
+    }
+}
+
+uint32_t Executor::Unlock(const std::string& handle)
+{
+    INFO("Unlock handle=", handle);
+
+    LockGuard lock(taskMutex);
+    auto itr = lockedApps.begin();
+    while (itr != lockedApps.end()) {
+        if (std::get<2>(itr->second) == handle) {
+            INFO("Unlocked type=", std::get<0>(itr->first), " id=", std::get<1>(itr->first), " version=", std::get<2>(itr->first));
+            itr = lockedApps.erase(itr);
+            return ERROR_NONE;
+        } else {
+            itr++;
+        }
+    }
+
+    return ERROR_WRONG_HANDLE;
+}
+
+uint32_t Executor::GetLockInfo(const std::string& type,
+                          const std::string& id,
+                          const std::string& version,
+                          std::string& reason,
+                          std::string& owner)
+{
+    INFO("GetLockInfo type=", type, " id=", id, " version=", version);
+
+    if (!isAppInstalled(type, id, version)) {
+        return ERROR_WRONG_PARAMS;
+    }
+
+    LockGuard lock(taskMutex);
+    auto itr = lockedApps.find({type, id, version});
+    if (itr != lockedApps.end()) {
+        reason = std::get<0>(itr->second);
+        owner = std::get<1>(itr->second);
+        INFO("GetLockInfo found reason=", reason, " owner=", owner);
+        return ERROR_NONE;
+    }
+
+    return ERROR_WRONG_HANDLE;
 }
 
 uint32_t Executor::GetProgress(const std::string& handle, std::uint32_t& progress)
@@ -391,6 +488,15 @@ bool Executor::isWorkerBusy() const
     return ! currentTask.handle.empty();
 }
 
+bool Executor::isWorkerBusy(const std::string& type,
+                            const std::string& id,
+                            const std::string& version) const
+{
+    if (!isWorkerBusy())
+        return false;
+    return currentTask.type == type && currentTask.id == id && currentTask.version == version;
+}
+
 void Executor::executeTask(std::function<void()> task)
 {
     assert(task);
@@ -405,41 +511,45 @@ void Executor::taskRunner(std::function<void()> task)
 {
     INFO(task, " started ");
 
-    std::string handle;
-    OperationStatus status = OperationStatus::SUCCESS;
+    OperationStatusEvent event;
+    event.status = OperationStatus::SUCCESS;
     std::string details;
 
     try {
         task();
         INFO(task, " done");
-        status = OperationStatus::SUCCESS;
+        event.status = OperationStatus::SUCCESS;
     }
     catch(CancelledException& exc){
         // nothing to do, cancelled flag already set
     }
     catch(std::exception& exc){
         ERROR("exception running ", task, ": ", exc.what());
-        status = OperationStatus::FAILED;
-        details = exc.what();
+        event.status = OperationStatus::FAILED;
+        event.details = exc.what();
     }
 
     auto cancelled{false};
     {
         LockGuard lock(taskMutex);
+        event.handle = currentTask.handle;
+        event.type = currentTask.type;
+        event.id = currentTask.id;
+        event.version = currentTask.version;
+        event.operation = currentTask.operation;
+
         cancelled = currentTask.cancelled.load();
         if (! cancelled){
             worker.detach();
-            handle = currentTask.handle;
+        } else {
+            event.status = OperationStatus::CANCELLED;
         }
         currentTask.reset();
     }
 
     INFO("scheduled ", currentTask, (cancelled ? " cancelled" : " done"));
 
-    if (! cancelled)
-    {
-        operationStatusCallback(handle, status, details);
-    }
+    operationStatusCallback(event);
 }
 
 bool Executor::isAppInstalled(const std::string& type,
@@ -655,7 +765,8 @@ void Executor::setProgress(int stagePercent, OperationStage stage)
 
     std::stringstream ss;
     ss << stage << " " << resultPercent << " %";
-    operationStatusCallback(currentTask.handle, OperationStatus::PROGRESS, ss.str());
+    operationStatusCallback({currentTask.handle, currentTask.operation, currentTask.type, currentTask.id,
+    currentTask.version, OperationStatus::PROGRESS, ss.str()});
 }
 
 std::ostream& operator<<(std::ostream& out, const Executor::Task& task)
@@ -676,7 +787,7 @@ std::ostream& operator<<(std::ostream& out, Executor::OperationStage stage)
 
 std::ostream& operator<<(std::ostream& out, const Executor::OperationStatus& status)
 {
-    return out << (status == Executor::OperationStatus::SUCCESS ? "SUCCESS" : status == Executor::OperationStatus::PROGRESS ? "PROGRESS" : "FAILED") ;
+    return out << Executor::OperationStatusEvent::statusStr(status);
 }
 
 } // namespace LISA
