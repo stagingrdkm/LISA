@@ -27,7 +27,7 @@ find_package(Boost COMPONENTS system filesystem REQUIRED)
 find_package(Sqlite REQUIRED)
 
 add_library(${MODULE_NAME} SHARED
-    Archive.cpp
+    Archives.cpp
     Config.cpp
     Downloader.cpp
     Executor.cpp
@@ -40,7 +40,7 @@ add_library(${MODULE_NAME} SHARED
     Module.cpp)
 
 set_target_properties(${MODULE_NAME} PROPERTIES
-        CXX_STANDARD 11
+        CXX_STANDARD 14
         CXX_STANDARD_REQUIRED YES)
 
 if (PLUGIN_LISA_APPS_GID)

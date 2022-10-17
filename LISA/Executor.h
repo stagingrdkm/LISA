@@ -46,6 +46,17 @@ struct StorageDetails;
 class Executor : private DownloaderListener
 {
 public:
+    enum ReturnCodes {
+        ERROR_NONE = 0, //Core::ERROR_NONE,
+        ERROR_GENERAL = 1,
+        ERROR_WRONG_PARAMS = 1001,
+        ERROR_TOO_MANY_REQUESTS = 1002,
+        ERROR_ALREADY_INSTALLED = 1003,
+        ERROR_WRONG_HANDLE = 1007,
+        ERROR_APP_LOCKED = 1009,
+        ERROR_APP_UNINSTALLING = 1010
+    };
+
     enum class OperationStatus {
         SUCCESS,
         FAILED,
@@ -57,15 +68,15 @@ public:
         UNINSTALLING
     };
     struct OperationStatusEvent {
-        string handle, type, id, version, details;
+        std::string handle, type, id, version, details;
         OperationType operation;
         OperationStatus status;
         OperationStatusEvent() {}
-        OperationStatusEvent(const string& handle_, const LISA::Executor::OperationType& operation_, const string& type_, const string& id_,
-                             const string& version_, const LISA::Executor::OperationStatus& status_, const string& details_) :
+        OperationStatusEvent(const std::string& handle_, const LISA::Executor::OperationType& operation_, const std::string& type_, const std::string& id_,
+                             const std::string& version_, const LISA::Executor::OperationStatus& status_, const std::string& details_) :
                              handle(handle_), type(type_), id(id_), version(version_), details(details_), operation(operation_), status(status_)
                              {}
-        static string statusStr(const LISA::Executor::OperationStatus& status) {
+        static std::string statusStr(const LISA::Executor::OperationStatus& status) {
             switch (status)
             {
                 case LISA::Executor::OperationStatus::SUCCESS:
@@ -79,10 +90,10 @@ public:
             }
             return "";
         }
-        string statusStr() const {
+        std::string statusStr() const {
             return OperationStatusEvent::statusStr(status);
         }
-        static string operationStr(const LISA::Executor::OperationType& operation) {
+        static std::string operationStr(const LISA::Executor::OperationType& operation) {
             switch (operation)
             {
                 case LISA::Executor::OperationType::INSTALLING:
@@ -92,7 +103,7 @@ public:
             }
             return "";
         }
-        string operationStr() const {
+        std::string operationStr() const {
             return OperationStatusEvent::operationStr(operation);
         }
     };

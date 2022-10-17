@@ -111,8 +111,7 @@ private:
     DownloaderListener& listener;
 
     // TODO read from config
-    static auto constexpr DEFAULT_RETRY_AFTER{300};
-    std::chrono::seconds retryAfterTime{DEFAULT_RETRY_AFTER};
+    std::chrono::seconds retryAfterTime{300};
 };
 
 } // namespace LISA

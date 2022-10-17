@@ -83,8 +83,13 @@ namespace { // anonymous
     {
         auto timeCreated = timeNow();
 
-        InsertIntoApps(type, id, appStoragePath, timeCreated);
-        auto appIdx = GetAppIdx(type, id);
+        int appIdx;
+        try {
+            appIdx = GetAppIdx(type, id);
+        } catch (const SqlDataStorageError& ex) {
+            InsertIntoApps(type, id, appStoragePath, timeCreated);
+            appIdx = GetAppIdx(type, id);
+        }
         InsertIntoInstalledApps(appIdx, version, appName, category, url, appPath, timeCreated);
     }
 
@@ -93,7 +98,7 @@ namespace { // anonymous
                                         const std::string& version)
     {
         INFO(" ");
-        string query = "SELECT idx FROM installed_apps WHERE app_idx IN (SELECT idx FROM apps WHERE type = ?1 AND app_id = ?2 AND version = ?3);";
+        std::string query = "SELECT idx FROM installed_apps WHERE app_idx IN (SELECT idx FROM apps WHERE (?1 IS NULL OR type = ?1) AND app_id = ?2 AND version = ?3);";
         sqlite3_stmt* stmt;
         sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
 
@@ -111,11 +116,30 @@ namespace { // anonymous
         }
     }
 
+    std::string SqlDataStorage::GetTypeOfApp(const std::string& id)
+    {
+        INFO(" ");
+        std::string type{};
+        std::string query = "SELECT type FROM apps WHERE app_id ==  $1;";
+        sqlite3_stmt* stmt;
+        sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
+
+        sqlite3_bind_text(stmt, 1, id.c_str(), -1, SQLITE_TRANSIENT);
+        if (sqlite3_step(stmt) != SQLITE_ROW) {
+            sqlite3_finalize(stmt);
+            throw SqlDataStorageError(std::string{"sqlite error: "} + sqlite3_errmsg(sqlite));
+        }
+        auto col1 = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0));
+        type = (col1 ? col1 : "");
+        sqlite3_finalize(stmt);
+        return type;
+    }
+
     bool SqlDataStorage::IsAppData(const std::string& type,
                                    const std::string& id)
     {
         INFO(" ");
-        string query = "SELECT idx FROM apps WHERE (?1 IS NULL OR type = ?1) AND (?2 IS NULL OR app_id = ?2)";
+        std::string query = "SELECT idx FROM apps WHERE (?1 IS NULL OR type = ?1) AND (?2 IS NULL OR app_id = ?2)";
         sqlite3_stmt* stmt;
         sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
 
@@ -151,7 +175,7 @@ namespace { // anonymous
                          const std::string& key,
                          const std::string& value)
     {
-        string query = "INSERT OR REPLACE INTO metadata(app_idx, meta_key, meta_value) "
+        std::string query = "INSERT OR REPLACE INTO metadata(app_idx, meta_key, meta_value) "
                         "VALUES("
                         "(SELECT installed_apps.idx FROM installed_apps INNER JOIN apps ON apps.idx = installed_apps.app_idx WHERE type = ?1 AND app_id = ?2 AND version = ?3),"
                         "?4,"
@@ -174,7 +198,7 @@ namespace { // anonymous
                          const std::string& version,
                          const std::string& key)
     {
-        string query = "DELETE FROM metadata "
+        std::string query = "DELETE FROM metadata "
                        "WHERE metadata.idx IN ("
                        "SELECT metadata.idx FROM metadata "
                        "INNER JOIN installed_apps ON installed_apps.idx = metadata.app_idx "
@@ -277,7 +301,7 @@ namespace { // anonymous
         ExecuteCommand("CREATE TABLE IF NOT EXISTS apps("
                                     "idx INTEGER PRIMARY KEY,"
                                     "type TEXT NOT NULL,"
-                                    "app_id TEXT NOT NULL,"
+                                    "app_id TEXT UNIQUE NOT NULL,"
                                     "data_path TEXT,"
                                     "created TEXT NOT NULL"
                                     ");");
@@ -293,7 +317,8 @@ namespace { // anonymous
                                               "created TEXT NOT NULL,"
                                               "resources TEXT,"
                                               "metadata TEXT,"
-                                              "FOREIGN KEY(app_idx) REFERENCES apps(idx)"
+                                              "FOREIGN KEY(app_idx) REFERENCES apps(idx),"
+                                              "UNIQUE(app_idx, version)"
                                               ");");
 
         ExecuteCommand("CREATE TABLE IF NOT EXISTS metadata("
@@ -351,7 +376,7 @@ namespace { // anonymous
     std::vector<std::string> SqlDataStorage::GetAppsPaths(const std::string& type, const std::string& id, const std::string& version)
     {
         INFO(" ");
-        string query = "SELECT app_path FROM installed_apps WHERE app_idx IN (SELECT idx FROM apps WHERE (?1 IS NULL OR type = ?1) AND (?2 IS NULL OR app_id = ?2)) AND (?3 IS NULL OR version = ?3)";
+        std::string query = "SELECT app_path FROM installed_apps WHERE app_idx IN (SELECT idx FROM apps WHERE (?1 IS NULL OR type = ?1) AND (?2 IS NULL OR app_id = ?2)) AND (?3 IS NULL OR version = ?3)";
         sqlite3_stmt* stmt;
         sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
 
@@ -366,7 +391,7 @@ namespace { // anonymous
     std::vector<std::string> SqlDataStorage::GetDataPaths(const std::string& type, const std::string& id)
     {
         INFO(" ");
-        string query = "SELECT data_path FROM apps WHERE (?1 IS NULL OR type = ?1) AND (?2 IS NULL OR app_id = ?2)";
+        std::string query = "SELECT data_path FROM apps WHERE (?1 IS NULL OR type = ?1) AND (?2 IS NULL OR app_id = ?2)";
         sqlite3_stmt* stmt;
         sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
 
@@ -395,7 +420,7 @@ namespace { // anonymous
                                                               const std::string& appName, const std::string& category)
     {
         INFO(" ");
-        string query = "SELECT A.type,A.app_id,IA.version,IA.name,IA.category,IA.url FROM installed_apps IA, apps A WHERE (IA.app_idx == A.idx) AND (?1 IS NULL OR A.type = ?1) AND (?2 IS NULL OR app_id = ?2) "
+        std::string query = "SELECT A.type,A.app_id,IA.version,IA.name,IA.category,IA.url FROM installed_apps IA, apps A WHERE (IA.app_idx == A.idx) AND (?1 IS NULL OR A.type = ?1) AND (?2 IS NULL OR app_id = ?2) "
                        "AND (?3 IS NULL OR version = ?3) AND (?4 IS NULL OR name = ?4) AND (?5 IS NULL OR category = ?5);";
         sqlite3_stmt* stmt;
         sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
@@ -426,7 +451,7 @@ namespace { // anonymous
                                         const std::string& timeCreated)
     {
         INFO(" ");
-        string query = "INSERT INTO apps VALUES(NULL, $1, $2, $3, $4);";
+        std::string query = "INSERT INTO apps VALUES(NULL, $1, $2, $3, $4);";
         sqlite3_stmt* stmt;
         sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
 
@@ -443,7 +468,7 @@ namespace { // anonymous
     {
         INFO(" ");
         int appIdx{INVALID_INDEX};
-        string query = "SELECT idx FROM apps WHERE type == $1 AND app_id ==  $2;";
+        std::string query = "SELECT idx FROM apps WHERE type == $1 AND app_id ==  $2;";
         sqlite3_stmt* stmt;
         sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
 
@@ -468,7 +493,7 @@ namespace { // anonymous
     {
         INFO(" ");
         assert(appIdx != INVALID_INDEX);
-        string query = "INSERT INTO installed_apps VALUES(NULL, $1, $2, $3, $4, $5, $6, $7, NULL, NULL);";
+        std::string query = "INSERT INTO installed_apps VALUES(NULL, $1, $2, $3, $4, $5, $6, $7, NULL, NULL);";
         sqlite3_stmt* stmt;
         sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
 
@@ -490,7 +515,7 @@ namespace { // anonymous
         INFO(" ");
         auto appIdx = GetAppIdx(type, id);
 
-        string query = "DELETE FROM installed_apps WHERE app_idx == $1 AND version == $2;";
+        std::string query = "DELETE FROM installed_apps WHERE app_idx == $1 AND version == $2;";
         sqlite3_stmt* stmt;
         sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
 
@@ -504,7 +529,7 @@ namespace { // anonymous
                                         const std::string& id)
     {
         INFO(" ");
-        string query = "DELETE FROM apps WHERE type == $1 AND app_id == $2;";
+        std::string query = "DELETE FROM apps WHERE type == $1 AND app_id == $2;";
         sqlite3_stmt* stmt;
         sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
 

@@ -41,9 +41,16 @@ void normalizeName(std::string& str)
 
 } // namespace anonymous
 
+bool isAcceptableFilePath(const std::string& pathPart)
+{
+    auto normalized = pathPart;
+    normalizeName(normalized);
+    return pathPart == normalized;
+}
+
 std::string createAppSubPath(std::string pathPart)
 {
-    normalizeName(pathPart);
+    // normalize not needed because of previous isAcceptableFilePath() check
     return pathPart + '/';
 }
 
@@ -68,6 +75,34 @@ bool createDirectory(const std::string& path)
     INFO("creating directory ", path);
     try {
         result = boost::filesystem::create_directories(path);
+    }
+    catch(boost::filesystem::filesystem_error& error) {
+        std::string message = std::string{} + "error " + error.what() + " creating directory";
+        throw FilesystemError(message);
+    }
+
+    return result;
+}
+
+bool createDirectory(const std::string& path, int gid, bool writeable)
+{
+    bool result{false};
+    INFO("creating directory ", path);
+    try {
+        boost::filesystem::path fullpath(path);
+        boost::filesystem::path subpath;
+        auto it = fullpath.begin();
+        while(it != fullpath.end()) {
+            subpath /= (*it);
+            if (!boost::filesystem::exists(subpath)) {
+                INFO("creating subdir ", subpath);
+                result = boost::filesystem::create_directory(subpath);
+                if (gid >= 0) {
+                    setPermission(subpath.string(), getuid(), gid, true, writeable);
+                }
+            }
+            it++;
+        }
     }
     catch(boost::filesystem::filesystem_error& error) {
         std::string message = std::string{} + "error " + error.what() + " creating directory";
