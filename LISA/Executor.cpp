@@ -19,7 +19,7 @@
 
 #include "Executor.h"
 
-#include "Archive.h"
+#include "Archives.h"
 #include "Config.h"
 #include "Debug.h"
 #include "Downloader.h"
@@ -31,6 +31,15 @@
 #include <cassert>
 #include <random>
 #include <ctime>
+
+#ifdef UNIT_TESTS
+namespace Core {
+  enum ErrorCodes {
+      ERROR_NONE = 0,
+      ERROR_GENERAL = 1
+  };
+}
+#endif
 
 namespace WPEFramework {
 namespace Plugin {
@@ -64,14 +73,13 @@ std::string generateHandle()
 //   easy easy to make mistake, similar code is different places
 struct AppId
 {
-    std::string type;
     std::string id;
     std::string version;
 };
 
 std::ostream& operator<<(std::ostream& out, const AppId& app)
 {
-    return out << "app[" << app.type << ":" << app.id << ":" << app.version << "]";
+    return out << "app[" << app.id << ":" << app.version << "]";
 }
 
 std::vector<AppId> scanDirectories(const std::string& appsPath, bool scanDataStorage)
@@ -80,67 +88,43 @@ std::vector<AppId> scanDirectories(const std::string& appsPath, bool scanDataSto
     std::string currentPath;
 
     auto appsPaths = Filesystem::getSubdirectories(appsPath);
-    for (auto& typePath : appsPaths) {
+    for (auto& idPath : appsPaths) {
 
-        currentPath = appsPath + typePath + '/';
+        currentPath = appsPath + idPath + '/';
         if (Filesystem::isEmpty(currentPath)) {
             INFO("empty dir: ", currentPath, " removing");
             Filesystem::removeDirectory(currentPath);
             continue;
         }
 
-        AppId app{};
-        app.type = typePath;
+        AppId appId{};
+        appId.id = idPath;
 
-        auto idSubPaths = Filesystem::getSubdirectories(currentPath);
-        for (auto& idSubPath : idSubPaths) {
+        if (scanDataStorage) {
+            apps.emplace_back(appId);
+        } else {
+            auto verSubPaths = Filesystem::getSubdirectories(currentPath);
+            for (auto& verSubPath : verSubPaths) {
 
-            currentPath = appsPath + typePath + '/' + idSubPath + '/';
-            if (Filesystem::isEmpty(currentPath)) {
-                INFO("empty dir: ", currentPath, " removing");
-                Filesystem::removeDirectory(currentPath);
-                continue;
-            }
-
-            AppId appId = app;
-            appId.id = idSubPath;
-
-            if (scanDataStorage) {
-                apps.emplace_back(appId);
-            } else {
-                auto verSubPaths = Filesystem::getSubdirectories(currentPath);
-                for (auto& verSubPath : verSubPaths) {
-
-                    currentPath = appsPath + typePath + '/' + idSubPath + '/' + verSubPath + '/';
-                    if (Filesystem::isEmpty(currentPath)) {
-                        INFO("empty dir: ", currentPath, " removing");
-                        Filesystem::removeDirectory(currentPath);
-                        continue;
-                    }
-
-                    AppId appVer = appId;
-                    appVer.version = verSubPath;
-
-                    apps.emplace_back(appVer);
+                currentPath = appsPath + idPath + '/' + verSubPath + '/';
+                if (Filesystem::isEmpty(currentPath)) {
+                    INFO("empty dir: ", currentPath, " removing");
+                    Filesystem::removeDirectory(currentPath);
+                    continue;
                 }
+
+                AppId appVer = appId;
+                appVer.version = verSubPath;
+
+                apps.emplace_back(appVer);
             }
         }
+
     }
     return apps;
 }
 
 } // namespace anonymous
-
-enum ReturnCodes {
-    ERROR_NONE = 0, //Core::ERROR_NONE,
-    ERROR_GENERAL = 1,
-    ERROR_WRONG_PARAMS = 1001,
-    ERROR_TOO_MANY_REQUESTS = 1002,
-    ERROR_ALREADY_INSTALLED = 1003,
-    ERROR_WRONG_HANDLE = 1007,
-    ERROR_APP_LOCKED = 1009,
-    ERROR_APP_UNINSTALLING = 1010
-};
 
 uint32_t Executor::Configure(const std::string& configString)
 {
@@ -175,15 +159,30 @@ uint32_t Executor::Install(const std::string& type,
         return ERROR_WRONG_PARAMS;
     }
 
-    if (isAppInstalled(type, id, version)) {
-        handle = "AlreadyInstalled";
-        return ERROR_ALREADY_INSTALLED;
+    if (!Filesystem::isAcceptableFilePath(id) || !Filesystem::isAcceptableFilePath(version)) {
+        handle = "WrongParams";
+        return ERROR_WRONG_PARAMS;
     }
 
     LockGuard lock(taskMutex);
     if (isWorkerBusy()) {
         handle = "TooManyRequests";
         return ERROR_TOO_MANY_REQUESTS;
+    }
+
+    if (isAppInstalled(type, id, version)) {
+        handle = "AlreadyInstalled";
+        return ERROR_ALREADY_INSTALLED;
+    }
+
+    try {
+        if (dataBase->GetTypeOfApp(id) != type) {
+            ERROR("In the DB id '", id, "' is already used with another type! App id must be unique.");
+            handle = "WrongParams";
+            return ERROR_WRONG_PARAMS;
+        }
+    } catch (const SqlDataStorageError&) {
+        // fine, no problem, not a single version of app(id) installed yet
     }
 
     currentTask.handle = generateHandle();
@@ -230,6 +229,7 @@ uint32_t Executor::Uninstall(const std::string& type,
 
     if (lockedApps.count({type, id, version}) == 1) {
         handle = "AppLocked";
+        INFO("Cannot uninstall app because of lock!");
         return ERROR_APP_LOCKED;
     }
 
@@ -256,6 +256,11 @@ uint32_t Executor::Lock(const std::string& type,
                         std::string& handle)
 {
     INFO("Lock type=", type, " id=", id, " version=", version);
+
+    if (type.empty() || id.empty() || version.empty()) {
+        handle = "WrongParams";
+        return ERROR_WRONG_PARAMS;
+    }
 
     if (!isAppInstalled(type, id, version)) {
         return ERROR_WRONG_PARAMS;
@@ -306,6 +311,10 @@ uint32_t Executor::GetLockInfo(const std::string& type,
                           std::string& owner)
 {
     INFO("GetLockInfo type=", type, " id=", id, " version=", version);
+
+    if (type.empty() || id.empty() || version.empty()) {
+        return ERROR_WRONG_PARAMS;
+    }
 
     if (!isAppInstalled(type, id, version)) {
         return ERROR_WRONG_PARAMS;
@@ -467,8 +476,16 @@ uint32_t Executor::GetMetadata(const std::string& type,
 
 void Executor::handleDirectories()
 {
+#if LISA_APPS_GID
+    Filesystem::createDirectory(config.getAppsPath() + Filesystem::LISA_EPOCH, LISA_APPS_GID, false);
+#else
     Filesystem::createDirectory(config.getAppsPath() + Filesystem::LISA_EPOCH);
+#endif
+#if LISA_DATA_GID
+    Filesystem::createDirectory(config.getAppsStoragePath() + Filesystem::LISA_EPOCH, LISA_DATA_GID, true);
+#else
     Filesystem::createDirectory(config.getAppsStoragePath() + Filesystem::LISA_EPOCH);
+#endif
     Filesystem::removeAllDirectoriesExcept(config.getAppsPath(), Filesystem::LISA_EPOCH);
     Filesystem::removeAllDirectoriesExcept(config.getAppsStoragePath(), Filesystem::LISA_EPOCH);
 }
@@ -581,7 +598,7 @@ void Executor::doInstall(std::string type,
         throw std::runtime_error(message);
     }
 
-    auto appSubPath = Filesystem::createAppPath(type, id, version);
+    auto appSubPath = Filesystem::createAppPath(id, version);
     INFO("appSubPath: ", appSubPath);
 
     auto tmpPath = config.getAppsTmpPath();
@@ -617,7 +634,7 @@ void Executor::doInstall(std::string type,
     INFO("unpacking ", tmpFilePath, "to ", appsPath);
     Archive::unpack(tmpFilePath, appsPath);
 
-    auto appStorageSubPath = Filesystem::createAppPath(type, id);
+    auto appStorageSubPath = Filesystem::createAppPath(id);
     auto appStoragePath = config.getAppsStoragePath() + appStorageSubPath;
 
     INFO("creating storage ", appStoragePath);
@@ -644,17 +661,20 @@ void Executor::doUninstall(std::string type, std::string id, std::string version
     dataBase->RemoveInstalledApp(type, id, version);
 
     // TODO should "id" be also removed? what if two versions are installed?
-    auto appSubPath = Filesystem::createAppPath(type, id, version);
+    auto appSubPath = Filesystem::createAppPath(id, version);
     auto appPath = config.getAppsPath() + appSubPath;
 
     INFO("removing ", appPath);
     Filesystem::removeDirectory(appPath);
 
     if (uninstallType == "full") {
-        dataBase->RemoveAppData(type, id);
-        auto appStoragePath = config.getAppsStoragePath() + Filesystem::createAppPath(type, id);
-        INFO("removing storage directory ", appStoragePath);
-        Filesystem::removeDirectory(appStoragePath);
+        // only remove app record + storage when no other version installed
+        if (dataBase->GetAppsPaths(type, id, "").size() == 0) {
+            dataBase->RemoveAppData(type, id);
+            auto appStoragePath = config.getAppsStoragePath() + Filesystem::createAppPath(id);
+            INFO("removing storage directory ", appStoragePath);
+            Filesystem::removeDirectory(appStoragePath);
+        }
     }
 
     doMaintenance();
@@ -674,9 +694,9 @@ void Executor::doMaintenance()
         auto foundApps = scanDirectories(appsPathRoot, false);
         for (const auto& app : foundApps) {
             INFO(app);
-            if (!dataBase->IsAppInstalled(app.type, app.id, app.version)) {
+            if (!dataBase->IsAppInstalled("", app.id, app.version)) {
                 ERROR(app, " not found in installed apps, removing dir");
-                auto path = config.getAppsPath() + Filesystem::createAppPath(app.type, app.id, app.version);
+                auto path = config.getAppsPath() + Filesystem::createAppPath(app.id, app.version);
                 Filesystem::removeDirectory(path);
             }
         }
@@ -686,9 +706,9 @@ void Executor::doMaintenance()
         auto foundAppsStorages = scanDirectories(appsStoragePathRoot, true);
         for (const auto& app : foundAppsStorages) {
             INFO(app);
-            if (!dataBase->IsAppData(app.type, app.id)) {
+            if (!dataBase->IsAppData("", app.id)) {
                 ERROR(app, " not found in apps, removing dir");
-                auto path = config.getAppsStoragePath() + Filesystem::createAppPath(app.type, app.id);
+                auto path = config.getAppsStoragePath() + Filesystem::createAppPath(app.id);
                 Filesystem::removeDirectory(path);
             }
         }

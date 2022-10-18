@@ -21,12 +21,37 @@
 
 #include <memory>
 #include <ostream>
+#include <sstream>
+#include <iostream>
+#include <chrono>
 #include <type_traits>
 
+#ifndef UNIT_TESTS
 #include "Module.h"
+#endif
 
 namespace WPEFramework {
 namespace Plugin {
+
+    // operator<<'s for debugging purposes
+
+    inline std::ostream& operator<<(std::ostream& out, std::chrono::seconds time)
+    {
+        return out << time.count() << " seconds";
+    }
+
+    template<class T>
+    std::ostream& operator<<(std::ostream& out, std::function<T> function)
+    {
+        return out << "function(" << ((void*)&function) << ")";
+    }
+
+    template <class T>
+    constexpr typename std::underlying_type<T>::type enumToInt(T e)
+    {
+        static_assert(std::is_enum<T>::value, "Given argument type is not enum");
+        return static_cast<typename std::underlying_type<T>::type>(e);
+    }
 
 /** INTERNAL HELPERS *******************************************************************/
 
@@ -70,7 +95,7 @@ void lisaInternalMakeLogMessage(Args&&... args)
     LOG_INTERNAL(__VA_ARGS__) \
     TRACE_L1("ERROR %s", str.c_str()); \
     } while(0)
-#else // #ifdef FORCE_TRACE_L1_DEBUGS
+#elif defined(TRACE_GLOBAL)
 #define INFO(...) do { \
     LOG_INTERNAL(__VA_ARGS__) \
     TRACE_GLOBAL(Trace::Information, ("%s", str.c_str())); \
@@ -85,27 +110,22 @@ void lisaInternalMakeLogMessage(Args&&... args)
     LOG_INTERNAL(__VA_ARGS__) \
     TRACE_GLOBAL(Trace::Error, ("%s", str.c_str())); \
     } while(0)
+#else
+#define INFO(...) do { \
+    LOG_INTERNAL(__VA_ARGS__) \
+    std::cout << "INFO " << str << std::endl; \
+    } while(0)
+
+#define INFO_THIS(...) do { \
+    LOG_INTERNAL(__VA_ARGS__) \
+    std::cout << "INFO " << str << std::endl; \
+    } while(0)
+
+#define ERROR(...) do { \
+    LOG_INTERNAL(__VA_ARGS__) \
+    std::cout << "ERROR " << str << std::endl; \
+    } while(0)
 #endif // #ifdef FORCE_TRACE_L1_DEBUGS
-
-// operator<<'s for debugging purposes
-
-inline std::ostream& operator<<(std::ostream& out, std::chrono::seconds time)
-{
-    return out << time << " seconds";
-}
-
-template<class T>
-std::ostream& operator<<(std::ostream& out, std::function<T> function)
-{
-    return out << "function(" << ((void*)&function) << ")";
-}
-
-template <class T>
-constexpr typename std::underlying_type<T>::type enumToInt(T e)
-{
-    static_assert(std::is_enum<T>::value, "Given argument type is not enum");
-    return static_cast<typename std::underlying_type<T>::type>(e);
-}
 
 } // namespace Plugin
 } // namespace WPEFramework

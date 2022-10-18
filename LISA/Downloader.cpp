@@ -21,6 +21,7 @@
 #include "Debug.h"
 
 #include <cassert>
+#include <thread>
 
 namespace WPEFramework {
 namespace Plugin {

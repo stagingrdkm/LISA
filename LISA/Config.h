@@ -45,10 +45,10 @@ public:
     friend std::ostream& operator<<(std::ostream& out, const Config& config);
 
 private:
-    std::string databasePath{"/mnt/apps/"};
-    std::string appsPath{"/mnt/apps/"};
-    std::string appsTmpPath{"/mnt/apps/tmp/"};
-    std::string appsStoragePath{"/mnt/data/"};
+    std::string databasePath{"/mnt/apps/dac/db/"};
+    std::string appsPath{"/mnt/apps/dac/images/"};
+    std::string appsTmpPath{"/mnt/apps/dac/images/tmp/"};
+    std::string appsStoragePath{"/mnt/data/dac/"};
 };
 
 } // namespace LISA

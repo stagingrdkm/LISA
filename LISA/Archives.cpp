@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-#include "Archive.h"
+#include "Archives.h"
 #include "Debug.h"
 
 #include <archive.h>
@@ -40,7 +40,7 @@ public:
     {
         assert(theArchive);
         archive_read_support_format_tar(theArchive);
-        archive_read_support_compression_gzip(theArchive);
+        archive_read_support_filter_gzip(theArchive);
 
         static constexpr int BLOCK_SIZE = 10240;
         if(archive_read_open_filename(theArchive, filePath.c_str(), BLOCK_SIZE) != ARCHIVE_OK) {

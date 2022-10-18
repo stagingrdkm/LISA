@@ -46,6 +46,7 @@ struct StorageDetails
 
 const std::string LISA_EPOCH = "0";
 
+bool isAcceptableFilePath(const std::string& pathPart);
 std::string createAppSubPath(std::string pathPart);
 
 template<typename... Args>
@@ -62,6 +63,7 @@ std::string createAppPath(Args... pathParts)
 
 bool directoryExists(const std::string& path);
 bool createDirectory(const std::string& path);
+bool createDirectory(const std::string& path, int gid, bool writeable);
 void removeDirectory(const std::string& path);
 void removeAllDirectoriesExcept(const std::string& path, const std::string& except);
 std::vector<std::string> getSubdirectories(const std::string& path);

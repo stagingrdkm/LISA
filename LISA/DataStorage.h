@@ -78,6 +78,8 @@ class DataStorage {
                                     const std::string& id,
                                     const std::string& version) = 0;
 
+        virtual std::string GetTypeOfApp(const std::string& id) = 0;
+
         virtual bool IsAppData(const std::string& type,
                                const std::string& id) = 0;
 
