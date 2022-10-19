@@ -216,7 +216,12 @@ uint32_t Executor::Uninstall(const std::string& type,
         return ERROR_WRONG_PARAMS;
     }
 
-    if (! isAppInstalled(type, id, version)) {
+    if (version.empty() && !type.empty() && !id.empty() && uninstallType == "full") {
+        // trying to cleanup storage path and app record?
+        if (dataBase->GetDataPaths(type, id).size() == 0) {
+            return ERROR_WRONG_PARAMS;
+        }
+    } else if (!isAppInstalled(type, id, version)) {
         handle = "WrongParams";
         return ERROR_WRONG_PARAMS;
     }
@@ -343,39 +348,31 @@ uint32_t Executor::GetProgress(const std::string& handle, std::uint32_t& progres
     }
 }
 
-bool Executor::getStorageParamsValid(const std::string& type,
-        const std::string& id,
-        const std::string& version) const
-{
-    // In Stage 1 we support only none parameters or all of them
-    return ((!type.empty() && !id.empty() && !version.empty()) || (type.empty() && id.empty() && version.empty()));
-}
-
 uint32_t Executor::GetStorageDetails(const std::string& type,
                            const std::string& id,
                            const std::string& version,
                            Filesystem::StorageDetails& details)
 {
     namespace fs = Filesystem;
-    if(!getStorageParamsValid(type, id, version)) {
-        return ERROR_WRONG_PARAMS;
-    }
+
     try {
-        if(type.empty()) {
+        if(type.empty() && id.empty() && version.empty()) {
             INFO("Calculating overall usage");
             details.appPath = config.getAppsPath();
             details.appUsedKB = std::to_string((fs::getDirectorySpace(config.getAppsPath()) + fs::getDirectorySpace(config.getAppsTmpPath())) / 1024);
             details.persistentPath = config.getAppsStoragePath();
             details.persistentUsedKB = std::to_string(fs::getDirectorySpace(config.getAppsStoragePath()) / 1024);
-        } else {
+        } else if (!id.empty()) {
             INFO("Calculating usage for: type = ", type, " id = ", id, " version = ", version);
-            std::vector<std::string> appsPaths = dataBase->GetAppsPaths(type, id, version);
-            unsigned long long appUsedKB{};
-            // In Stage 1 there will be only one entry here
-            for(const auto& i: appsPaths)
-            {
-                details.appPath = config.getAppsPath() + i;
-                appUsedKB += fs::getDirectorySpace(details.appPath);
+            if (!version.empty()) {
+                std::vector<std::string> appsPaths = dataBase->GetAppsPaths(type, id, version);
+                unsigned long long appUsedKB{};
+                // In Stage 1 there will be only one entry here
+                for (const auto &i: appsPaths) {
+                    details.appPath = config.getAppsPath() + i;
+                    appUsedKB += fs::getDirectorySpace(details.appPath);
+                }
+                details.appUsedKB = std::to_string(appUsedKB / 1024);
             }
             std::vector<std::string> dataPaths = dataBase->GetDataPaths(type, id);
             unsigned long long persistentUsedKB{};
@@ -384,11 +381,12 @@ uint32_t Executor::GetStorageDetails(const std::string& type,
                 details.persistentPath = config.getAppsStoragePath() + i;
                 persistentUsedKB += fs::getDirectorySpace(details.persistentPath);
             }
-            details.appUsedKB = std::to_string(appUsedKB / 1024);
             details.persistentUsedKB = std::to_string(persistentUsedKB / 1024);
+        } else {
+            return ERROR_WRONG_PARAMS;
         }
     } catch (std::exception& error) {
-        ERROR("Unable to retrive storage details: ", error.what());
+        ERROR("Unable to retrieve storage details: ", error.what());
         return Core::ERROR_GENERAL;
     }
     return ERROR_NONE;
@@ -402,7 +400,7 @@ uint32_t Executor::GetAppDetailsList(const std::string& type,
                           std::vector<DataStorage::AppDetails>& appsDetailsList) const
 {
     try {
-        appsDetailsList = dataBase->GetAppDetailsList(type, id, version, appName, category);
+        appsDetailsList = dataBase->GetAppDetailsListOuterJoin(type, id, version, appName, category);
     } catch (std::exception& error) {
         ERROR("Unable to get Applications details: ", error.what());
         return Core::ERROR_GENERAL;
@@ -437,6 +435,10 @@ uint32_t Executor::SetMetadata(const std::string& type,
                          const std::string& key,
                          const std::string& value)
 {
+    if (type.empty() || id.empty() || version.empty() || key.empty()) {
+        return ERROR_WRONG_PARAMS;
+    }
+
     try {
         dataBase->SetMetadata(type, id, version, key, value);
     } catch (std::exception& error) {
@@ -451,6 +453,10 @@ uint32_t Executor::ClearMetadata(const std::string& type,
                          const std::string& version,
                          const std::string& key)
 {
+    if (type.empty() || id.empty() || version.empty()) {
+        return ERROR_WRONG_PARAMS;
+    }
+
     try {
         dataBase->ClearMetadata(type, id, version, key);
     } catch (std::exception& error) {
@@ -465,6 +471,10 @@ uint32_t Executor::GetMetadata(const std::string& type,
                          const std::string& version,
                          DataStorage::AppMetadata& metadata) const
 {
+    if (type.empty() || id.empty() || version.empty()) {
+        return ERROR_WRONG_PARAMS;
+    }
+
     try {
         metadata = dataBase->GetMetadata(type, id, version);
     } catch (std::exception& error) {
@@ -658,14 +668,15 @@ void Executor::doUninstall(std::string type, std::string id, std::string version
 {
     INFO("type=", type, " id=", id, " version=", version, " uninstallType=", uninstallType);
 
-    dataBase->RemoveInstalledApp(type, id, version);
+    if (!version.empty()) {
+        dataBase->RemoveInstalledApp(type, id, version);
 
-    // TODO should "id" be also removed? what if two versions are installed?
-    auto appSubPath = Filesystem::createAppPath(id, version);
-    auto appPath = config.getAppsPath() + appSubPath;
+        auto appSubPath = Filesystem::createAppPath(id, version);
+        auto appPath = config.getAppsPath() + appSubPath;
 
-    INFO("removing ", appPath);
-    Filesystem::removeDirectory(appPath);
+        INFO("removing ", appPath);
+        Filesystem::removeDirectory(appPath);
+    }
 
     if (uninstallType == "full") {
         // only remove app record + storage when no other version installed
@@ -713,7 +724,7 @@ void Executor::doMaintenance()
             }
         }
 
-        auto appsDetailsList = dataBase->GetAppDetailsList();
+        auto appsDetailsList = dataBase->GetAppDetailsListOuterJoin();
         for (const auto& details : appsDetailsList) {
             INFO("details: ", details.id, ":", details.version);
 

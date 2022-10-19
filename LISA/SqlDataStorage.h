@@ -49,6 +49,8 @@ class SqlDataStorage: public DataStorage
         std::vector<DataStorage::AppDetails> GetAppDetailsList(const std::string& type, const std::string& id, const std::string& version,
                                                   const std::string& appName, const std::string& category) override;
 
+        std::vector<DataStorage::AppDetails> GetAppDetailsListOuterJoin(const std::string& type, const std::string& id, const std::string& version,
+                                                                        const std::string& appName, const std::string& category) override;
         void AddInstalledApp(const std::string& type,
                              const std::string& id,
                              const std::string& version,

@@ -222,10 +222,6 @@ private:
 
     void doMaintenance();
 
-    bool getStorageParamsValid(const std::string& type,
-            const std::string& id,
-            const std::string& version) const;
-
     void setProgress(int progress) override;
     bool isCancelled() override;
     void setProgress(int percentValue, OperationStage stage);

@@ -44,6 +44,17 @@ class DataStorage {
             std::string appName;
             std::string category;
             std::string url;
+
+            AppDetails() {}
+            AppDetails(const char *type_, const char *id_, const char *version_, const char *appName_,
+                       const char *category_, const char *url_) {
+                type = type_ ? type_ : "";
+                id = id_ ? id_ : "";
+                version = version_ ? version_ : "";
+                appName = appName_ ? appName_ : "";
+                category = category_ ? category_ : "";
+                url = url_ ? url_ : "";
+            }
         };
 
         struct AppMetadata
@@ -64,6 +75,11 @@ class DataStorage {
                                                           const std::string& version = {},
                                                           const std::string& appName = {},
                                                           const std::string& category = {}) = 0;
+        virtual std::vector<AppDetails> GetAppDetailsListOuterJoin(const std::string& type = {},
+                                                      const std::string& id = {},
+                                                      const std::string& version = {},
+                                                      const std::string& appName = {},
+                                                      const std::string& category = {}) = 0;
 
         virtual void AddInstalledApp(const std::string& type,
                                      const std::string& id,

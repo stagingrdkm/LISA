@@ -160,6 +160,7 @@ namespace { // anonymous
                                             const std::string& id,
                                             const std::string& version)
     {
+        ClearMetadata(type, id, version, "");
         DeleteFromInstalledApps(type, id, version);
     }
 
@@ -193,6 +194,7 @@ namespace { // anonymous
         sqlite3_finalize(stmt);
     }
 
+    // key can be empty to clear all metadata of an app
     void SqlDataStorage::ClearMetadata(const std::string& type,
                          const std::string& id,
                          const std::string& version,
@@ -203,7 +205,7 @@ namespace { // anonymous
                        "SELECT metadata.idx FROM metadata "
                        "INNER JOIN installed_apps ON installed_apps.idx = metadata.app_idx "
                        "INNER JOIN apps ON apps.idx = installed_apps.app_idx "
-                       "WHERE type = ?1 AND app_id = ?2 AND version = ?3 AND meta_key = ?4);";
+                       "WHERE type = ?1 AND app_id = ?2 AND version = ?3 AND (?4 IS NULL OR meta_key = ?4));";
 
         sqlite3_stmt* stmt;
         sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
@@ -211,7 +213,7 @@ namespace { // anonymous
         sqlite3_bind_text(stmt, 1, type.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text(stmt, 2, id.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text(stmt, 3, version.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmt, 4, key.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 4, key.empty()? nullptr: key.c_str(), -1, SQLITE_TRANSIENT);
         ExecuteSqlStep(stmt);
         sqlite3_finalize(stmt);
     }
@@ -445,6 +447,35 @@ namespace { // anonymous
         return appsList;
     }
 
+    // version, appName, category will by empty when no apps_installed record found for a type+id
+    std::vector<DataStorage::AppDetails> SqlDataStorage::GetAppDetailsListOuterJoin(const std::string& type, const std::string& id, const std::string& version,
+                                                                           const std::string& appName, const std::string& category)
+    {
+        INFO(" ");
+        std::string query = "SELECT type, app_id, version, name, category, url FROM apps LEFT OUTER JOIN installed_apps ON installed_apps.app_idx = apps.idx WHERE (?1 IS NULL OR type = ?1) AND (?2 IS NULL OR app_id = ?2) "
+                            "AND (?3 IS NULL OR version = ?3) AND (?4 IS NULL OR name = ?4) AND (?5 IS NULL OR category = ?5);";
+        sqlite3_stmt* stmt;
+        sqlite3_prepare_v2(sqlite, query.c_str(), query.length(), &stmt, nullptr);
+        sqlite3_bind_text(stmt, 1, type.empty() ? nullptr : type.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, id.empty() ? nullptr : id.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 3, version.empty() ? nullptr : version.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 4, appName.empty() ? nullptr : appName.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 5, category.empty() ? nullptr : category.c_str(), -1, SQLITE_TRANSIENT);
+        int rc{};
+        std::vector<AppDetails> appsList;
+        while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+
+            appsList.push_back(AppDetails{reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)), reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1)),
+                                          reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2)), reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3)),
+                                          reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4)), reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5))});
+        }
+        if (rc != SQLITE_DONE) {
+            sqlite3_finalize(stmt);
+            throw SqlDataStorageError(std::string{"sqlite error: "} + sqlite3_errmsg(sqlite));
+        }
+        sqlite3_finalize(stmt);
+        return appsList;
+    }
     void SqlDataStorage::InsertIntoApps(const std::string& type,
                                         const std::string& id,
                                         const std::string& appPath,

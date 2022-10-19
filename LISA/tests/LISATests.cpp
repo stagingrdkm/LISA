@@ -24,6 +24,9 @@
 #include <unistd.h>
 #include <cstdlib>
 #include <csignal>
+#include <fstream>
+#include <string>
+#include <iostream>
 
 #include <Executor.h>
 #include <Filesystem.h>
@@ -81,16 +84,22 @@ static void configure(Executor &lisa) {
 }
 
 static Executor::OperationStatusEvent last_event_received_;
+static vector<Executor::OperationStatusEvent> all_events_received_;
+static bool record_all_events_{false};
 static condition_variable cond_var_;
 static mutex mutex_;
 static bool event_received_;
 
 static  void eventHandler(const Executor::OperationStatusEvent &event) {
     std::unique_lock<std::mutex> lock(mutex_);
+    if (record_all_events_) {
+        all_events_received_.push_back(event);
+    }
     if (event.status == Executor::OperationStatus::PROGRESS) {
         // ignore progress
         return;
     }
+    cout << "Received event from " << event.id << " : " << event.operationStr() << ":" << event.statusStr() << endl;
     last_event_received_ = event;
     event_received_ = true;
     cond_var_.notify_one();
@@ -99,6 +108,18 @@ static  void eventHandler(const Executor::OperationStatusEvent &event) {
 static bool waitForEvent(int timeout_secs) {
     std::unique_lock<std::mutex> lock(mutex_);
     event_received_ = false;
+    const auto status =
+            cond_var_.wait_for(
+                    lock, std::chrono::seconds(timeout_secs), [] { return event_received_; });
+    return status;
+}
+
+static bool waitForEventIncludingAlreadyArrivedOne(int timeout_secs) {
+    std::unique_lock<std::mutex> lock(mutex_);
+    if (event_received_) {
+        event_received_ = false;
+        return true;
+    }
     const auto status =
             cond_var_.wait_for(
                     lock, std::chrono::seconds(timeout_secs), [] { return event_received_; });
@@ -501,4 +522,430 @@ CATCH_TEST_CASE("LISA : lock/uninstall test normal", "[all][test8][quick]") {
     CATCH_REQUIRE(waitForEvent(30));
     CATCH_CHECK(last_event_received_.operation == Executor::OperationType::UNINSTALLING);
     CATCH_CHECK(last_event_received_.status == Executor::OperationStatus::SUCCESS);
+}
+
+CATCH_TEST_CASE("LISA : uninstall test (upgrade)", "[all][test9][quick]") {
+    Executor lisa([](const Executor::OperationStatusEvent &event) {
+        eventHandler(event);
+    });
+    configure(lisa);
+
+    string handle;
+    auto result = lisa.Install("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0", demo_tarball, "appname", "cat", handle);
+    CATCH_REQUIRE(result == 0);
+    CATCH_REQUIRE_FALSE(handle.empty());
+    CATCH_REQUIRE(waitForEvent(30));
+    CATCH_CHECK(last_event_received_.status == Executor::OperationStatus::SUCCESS);
+
+    string uninstall_handle;
+    result = lisa.Uninstall("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0", "upgrade" , uninstall_handle);
+    CATCH_REQUIRE(result == 0);
+    CATCH_REQUIRE_FALSE(uninstall_handle.empty());
+    CATCH_REQUIRE(waitForEvent(30));
+    CATCH_CHECK(last_event_received_.operation == Executor::OperationType::UNINSTALLING);
+    CATCH_CHECK(last_event_received_.status == Executor::OperationStatus::SUCCESS);
+
+    CATCH_CHECK(countAppsInDB() == 1);
+    CATCH_CHECK(countInstalledAppsInDB() == 0);
+    CATCH_CHECK(!findPathInAppsPath("0/com.rdk.waylandegltest/1.0.0/rootfs/usr/bin/wayland-egl-test"));
+    CATCH_CHECK(findPathInStoragePath("0/com.rdk.waylandegltest"));
+
+    Filesystem::StorageDetails details, detailsb;
+    result = lisa.GetStorageDetails("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "", details);
+    CATCH_CHECK(result == 0);
+    CATCH_CHECK(details.appPath.empty());
+    CATCH_CHECK(details.persistentPath == (lisa_playground + data_subpath + "/0/com.rdk.waylandegltest/"));
+
+    result = lisa.GetStorageDetails("", "com.rdk.waylandegltest", "", detailsb);
+    CATCH_CHECK(result == 0);
+    CATCH_CHECK(detailsb.appPath.empty());
+    CATCH_CHECK(detailsb.persistentPath == (lisa_playground + data_subpath + "/0/com.rdk.waylandegltest/"));
+
+    std::vector<DataStorage::AppDetails> appDetails, appDetailsb;
+    result = lisa.GetAppDetailsList("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "", "", "", appDetails);
+    CATCH_CHECK(result == 0);
+    CATCH_CHECK(appDetails.size() == 1);
+    result = lisa.GetAppDetailsList("", "com.rdk.waylandegltest", "", "", "", appDetailsb);
+    CATCH_CHECK(result == 0);
+    CATCH_CHECK(appDetailsb.size() == 1);
+
+    result = lisa.Install("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "2.0.0", demo_tarball, "appname", "cat", handle);
+    CATCH_REQUIRE(result == 0);
+    CATCH_REQUIRE_FALSE(handle.empty());
+    CATCH_REQUIRE(waitForEvent(30));
+    CATCH_CHECK(last_event_received_.status == Executor::OperationStatus::SUCCESS);
+
+    CATCH_CHECK(countAppsInDB() == 1);
+    CATCH_CHECK(countInstalledAppsInDB() == 1);
+
+    Filesystem::StorageDetails details2;
+    result = lisa.GetStorageDetails("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "2.0.0", details2);
+    CATCH_CHECK(result == 0);
+    CATCH_CHECK(details2.appPath == (lisa_playground + apps_subpath + "/0/com.rdk.waylandegltest/2.0.0/"));
+    CATCH_CHECK(details2.persistentPath == (lisa_playground + data_subpath + "/0/com.rdk.waylandegltest/"));
+
+    appDetails.clear();
+    result = lisa.GetAppDetailsList("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "", "", "", appDetails);
+    CATCH_CHECK(result == 0);
+    CATCH_CHECK(appDetails.size() == 1);
+}
+
+CATCH_TEST_CASE("LISA : uninstall test (upgrade), followed by full uninstall", "[all][test10][quick]") {
+    Executor lisa([](const Executor::OperationStatusEvent &event) {
+        eventHandler(event);
+    });
+    configure(lisa);
+
+    string handle;
+    auto result = lisa.Install("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0", demo_tarball, "appname", "cat", handle);
+    CATCH_REQUIRE(result == 0);
+    CATCH_REQUIRE_FALSE(handle.empty());
+    CATCH_REQUIRE(waitForEvent(30));
+    CATCH_CHECK(last_event_received_.status == Executor::OperationStatus::SUCCESS);
+
+    string uninstall_handle;
+    result = lisa.Uninstall("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0", "upgrade" , uninstall_handle);
+    CATCH_REQUIRE(result == 0);
+    CATCH_REQUIRE_FALSE(uninstall_handle.empty());
+    CATCH_REQUIRE(waitForEvent(30));
+    CATCH_CHECK(last_event_received_.operation == Executor::OperationType::UNINSTALLING);
+    CATCH_CHECK(last_event_received_.status == Executor::OperationStatus::SUCCESS);
+
+    CATCH_CHECK(countAppsInDB() == 1);
+    CATCH_CHECK(countInstalledAppsInDB() == 0);
+    CATCH_CHECK(!findPathInAppsPath("0/com.rdk.waylandegltest/1.0.0/rootfs/usr/bin/wayland-egl-test"));
+    CATCH_CHECK(findPathInStoragePath("0/com.rdk.waylandegltest"));
+
+    Filesystem::StorageDetails details;
+    result = lisa.GetStorageDetails("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "", details);
+    CATCH_CHECK(result == 0);
+    CATCH_CHECK(details.appPath.empty());
+    CATCH_CHECK(details.persistentPath == (lisa_playground + data_subpath + "/0/com.rdk.waylandegltest/"));
+
+    std::vector<DataStorage::AppDetails> appDetails;
+    result = lisa.GetAppDetailsList("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "", "", "", appDetails);
+    CATCH_CHECK(result == 0);
+    CATCH_CHECK(appDetails.size() == 1);
+
+    uninstall_handle = "";
+    result = lisa.Uninstall("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "", "full" , uninstall_handle);
+    CATCH_REQUIRE(result == 0);
+    CATCH_REQUIRE_FALSE(uninstall_handle.empty());
+    CATCH_REQUIRE(waitForEvent(30));
+    CATCH_CHECK(last_event_received_.operation == Executor::OperationType::UNINSTALLING);
+    CATCH_CHECK(last_event_received_.status == Executor::OperationStatus::SUCCESS);
+
+    CATCH_CHECK(countAppsInDB() == 0);
+    CATCH_CHECK(countInstalledAppsInDB() == 0);
+    CATCH_CHECK(!findPathInAppsPath("0/com.rdk.waylandegltest/1.0.0/rootfs/usr/bin/wayland-egl-test"));
+    CATCH_CHECK(!findPathInStoragePath("0/com.rdk.waylandegltest"));
+
+    Filesystem::StorageDetails details2;
+    result = lisa.GetStorageDetails("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "", details2);
+    CATCH_CHECK(result == 0);
+    CATCH_CHECK(details2.appPath.empty());
+    CATCH_CHECK(details2.persistentPath.empty());
+
+    std::vector<DataStorage::AppDetails> appDetails2;
+    result = lisa.GetAppDetailsList("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "", "", "", appDetails2);
+    CATCH_CHECK(result == 0);
+    CATCH_CHECK(appDetails2.size() == 0);
+}
+
+void outputFile(string path, string contents) {
+    ofstream out(path);
+    out << contents;
+    out.close();
+}
+
+string inputFile(string path) {
+    ifstream t(path);
+    return string((istreambuf_iterator<char>(t)), istreambuf_iterator<char>());
+}
+
+CATCH_TEST_CASE("LISA : uninstall test (upgrade), followed by install new version same app", "[all][test11][quick]") {
+    Executor lisa([](const Executor::OperationStatusEvent &event) {
+        eventHandler(event);
+    });
+    configure(lisa);
+
+    string handle;
+    auto result = lisa.Install("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0", demo_tarball, "appname", "cat", handle);
+    CATCH_REQUIRE(result == 0);
+    CATCH_REQUIRE_FALSE(handle.empty());
+    CATCH_REQUIRE(waitForEvent(30));
+    CATCH_CHECK(last_event_received_.status == Executor::OperationStatus::SUCCESS);
+
+    Filesystem::StorageDetails details;
+    result = lisa.GetStorageDetails("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "", details);
+    CATCH_CHECK(result == 0);
+    CATCH_CHECK(details.appPath.empty());
+    CATCH_CHECK(details.persistentPath == (lisa_playground + data_subpath + "/0/com.rdk.waylandegltest/"));
+
+    // simulate app was run and persisted some data
+    string persisted_data{"Some persisted data here..."};
+    outputFile(details.persistentPath+"somedata.txt", persisted_data);
+
+    string uninstall_handle;
+    result = lisa.Uninstall("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0", "upgrade" , uninstall_handle);
+    CATCH_REQUIRE(result == 0);
+    CATCH_REQUIRE_FALSE(uninstall_handle.empty());
+    CATCH_REQUIRE(waitForEvent(30));
+    CATCH_CHECK(last_event_received_.operation == Executor::OperationType::UNINSTALLING);
+    CATCH_CHECK(last_event_received_.status == Executor::OperationStatus::SUCCESS);
+
+    CATCH_CHECK(countAppsInDB() == 1);
+    CATCH_CHECK(countInstalledAppsInDB() == 0);
+    CATCH_CHECK(!findPathInAppsPath("0/com.rdk.waylandegltest/1.0.0/rootfs/usr/bin/wayland-egl-test"));
+    CATCH_CHECK(findPathInStoragePath("0/com.rdk.waylandegltest"));
+    CATCH_CHECK(inputFile(details.persistentPath+"somedata.txt") == persisted_data);
+
+    std::vector<DataStorage::AppDetails> appDetails;
+    result = lisa.GetAppDetailsList("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "", "", "", appDetails);
+    CATCH_CHECK(result == 0);
+    CATCH_CHECK(appDetails.size() == 1);
+
+    result = lisa.Install("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "2.0.0", demo_tarball,
+                               "appname", "cat", handle);
+    CATCH_REQUIRE(result == 0);
+    CATCH_REQUIRE_FALSE(handle.empty());
+    CATCH_REQUIRE(waitForEvent(30));
+    CATCH_CHECK(last_event_received_.status == Executor::OperationStatus::SUCCESS);
+
+    CATCH_CHECK(countAppsInDB() == 1);
+    CATCH_CHECK(countInstalledAppsInDB() == 1);
+    CATCH_CHECK(findPathInAppsPath("0/com.rdk.waylandegltest/2.0.0/rootfs/usr/bin/wayland-egl-test"));
+    CATCH_CHECK(findPathInStoragePath("0/com.rdk.waylandegltest"));
+    CATCH_CHECK(inputFile(details.persistentPath+"somedata.txt") == persisted_data);
+}
+
+bool findInMetadata(const DataStorage::AppMetadata &metadata, string key, string val) {
+    for(const auto &x: metadata.metadata) {
+        if (x.first == key) {
+            return x.second == val;
+        }
+    }
+    return false;
+}
+
+CATCH_TEST_CASE("LISA : metadata test", "[all][test12][quick]") {
+    Executor lisa([](const Executor::OperationStatusEvent &event) {
+        eventHandler(event);
+    });
+    configure(lisa);
+
+    string handle;
+    auto result = lisa.Install("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0", demo_tarball,
+                               "appname", "cat", handle);
+    CATCH_REQUIRE(result == 0);
+    CATCH_REQUIRE_FALSE(handle.empty());
+    CATCH_REQUIRE(waitForEvent(30));
+    CATCH_CHECK(last_event_received_.status == Executor::OperationStatus::SUCCESS);
+
+    {
+        DataStorage::AppMetadata metadata;
+        result = lisa.GetMetadata("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0", metadata);
+        CATCH_REQUIRE(result == 0);
+        CATCH_CHECK(metadata.appDetails.id == "com.rdk.waylandegltest");
+        CATCH_CHECK(metadata.appDetails.version == "1.0.0");
+        CATCH_CHECK(metadata.metadata.size() == 0);
+    }
+
+    result = lisa.SetMetadata("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0", "key1", "value1");
+    CATCH_REQUIRE(result == 0);
+
+    {
+        DataStorage::AppMetadata metadata;
+        result = lisa.GetMetadata("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0", metadata);
+        CATCH_REQUIRE(result == 0);
+        CATCH_CHECK(metadata.appDetails.id == "com.rdk.waylandegltest");
+        CATCH_CHECK(metadata.appDetails.version == "1.0.0");
+        CATCH_CHECK(metadata.metadata.size() == 1);
+        CATCH_CHECK(findInMetadata(metadata, "key1", "value1"));
+    }
+
+    result = lisa.Install("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "2.0.0", demo_tarball,
+                          "appname", "cat", handle);
+    CATCH_REQUIRE(result == 0);
+    CATCH_REQUIRE_FALSE(handle.empty());
+    CATCH_REQUIRE(waitForEvent(30));
+    CATCH_CHECK(last_event_received_.status == Executor::OperationStatus::SUCCESS);
+
+    result = lisa.SetMetadata("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0", "key2", "value2");
+    CATCH_REQUIRE(result == 0);
+
+    result = lisa.SetMetadata("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "2.0.0", "key3", "value3");
+    CATCH_REQUIRE(result == 0);
+
+    CATCH_SECTION( "clear metadata all at once" ) {
+        result = lisa.ClearMetadata("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0", "");
+        CATCH_REQUIRE(result == 0);
+
+        {
+            DataStorage::AppMetadata metadata;
+            result = lisa.GetMetadata("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0",
+                                      metadata);
+            CATCH_REQUIRE(result == 0);
+            CATCH_CHECK(metadata.appDetails.id == "com.rdk.waylandegltest");
+            CATCH_CHECK(metadata.appDetails.version == "1.0.0");
+            CATCH_CHECK(metadata.metadata.size() == 0);
+        }
+
+        // the one key for 2.0.0 should still be there
+        CATCH_CHECK(countInDB("metadata") == 1);
+    }
+
+    CATCH_SECTION( "metadata replace key test" ) {
+        result = lisa.SetMetadata("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0", "key1",
+                                  "value2");
+        CATCH_REQUIRE(result == 0);
+
+        result = lisa.SetMetadata("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0", "key1",
+                                  "valuex");
+        CATCH_REQUIRE(result == 0);
+
+        {
+            DataStorage::AppMetadata metadata;
+            result = lisa.GetMetadata("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0", metadata);
+            CATCH_REQUIRE(result == 0);
+            CATCH_CHECK(metadata.appDetails.id == "com.rdk.waylandegltest");
+            CATCH_CHECK(metadata.appDetails.version == "1.0.0");
+            CATCH_CHECK(metadata.metadata.size() == 2);
+            CATCH_CHECK(findInMetadata(metadata, "key1", "valuex"));
+            CATCH_CHECK(findInMetadata(metadata, "key2", "value2"));
+        }
+
+        CATCH_CHECK(countInDB("metadata") == 3);
+    }
+
+    CATCH_SECTION( "normal metadata test + uninstall that should remove all" ) {
+        {
+            DataStorage::AppMetadata metadata;
+            result = lisa.GetMetadata("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0",
+                                      metadata);
+            CATCH_REQUIRE(result == 0);
+            CATCH_CHECK(metadata.appDetails.id == "com.rdk.waylandegltest");
+            CATCH_CHECK(metadata.appDetails.version == "1.0.0");
+            CATCH_CHECK(metadata.metadata.size() == 2);
+            CATCH_CHECK(findInMetadata(metadata, "key1", "value1"));
+            CATCH_CHECK(findInMetadata(metadata, "key2", "value2"));
+        }
+
+        {
+            DataStorage::AppMetadata metadata;
+            result = lisa.GetMetadata("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "2.0.0",
+                                      metadata);
+            CATCH_REQUIRE(result == 0);
+            CATCH_CHECK(metadata.appDetails.id == "com.rdk.waylandegltest");
+            CATCH_CHECK(metadata.appDetails.version == "2.0.0");
+            CATCH_CHECK(metadata.metadata.size() == 1);
+            CATCH_CHECK(findInMetadata(metadata, "key3", "value3"));
+        }
+
+        result = lisa.ClearMetadata("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0", "key1");
+        CATCH_REQUIRE(result == 0);
+
+        result = lisa.ClearMetadata("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "2.0.0", "key3");
+        CATCH_REQUIRE(result == 0);
+
+        {
+            DataStorage::AppMetadata metadata;
+            result = lisa.GetMetadata("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0",
+                                      metadata);
+            CATCH_REQUIRE(result == 0);
+            CATCH_CHECK(metadata.appDetails.id == "com.rdk.waylandegltest");
+            CATCH_CHECK(metadata.appDetails.version == "1.0.0");
+            CATCH_CHECK(metadata.metadata.size() == 1);
+            CATCH_CHECK(findInMetadata(metadata, "key2", "value2"));
+        }
+
+        {
+            DataStorage::AppMetadata metadata;
+            result = lisa.GetMetadata("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "2.0.0",
+                                      metadata);
+            CATCH_REQUIRE(result == 0);
+            CATCH_CHECK(metadata.appDetails.id == "com.rdk.waylandegltest");
+            CATCH_CHECK(metadata.appDetails.version == "2.0.0");
+            CATCH_CHECK(metadata.metadata.size() == 0);
+        }
+
+        string uninstall_handle;
+        result = lisa.Uninstall("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0", "full",
+                                uninstall_handle);
+        CATCH_REQUIRE(result == 0);
+        CATCH_REQUIRE_FALSE(uninstall_handle.empty());
+        CATCH_REQUIRE(waitForEvent(30));
+        CATCH_CHECK(last_event_received_.operation == Executor::OperationType::UNINSTALLING);
+        CATCH_CHECK(last_event_received_.status == Executor::OperationStatus::SUCCESS);
+
+        {
+            DataStorage::AppMetadata metadata;
+            result = lisa.GetMetadata("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0",
+                                      metadata);
+            CATCH_REQUIRE(result == Executor::ReturnCodes::ERROR_GENERAL);
+            CATCH_CHECK(metadata.metadata.size() == 0);
+        }
+
+        CATCH_CHECK(countInDB("metadata") == 0);
+    }
+}
+
+CATCH_TEST_CASE("LISA : cancel installation test", "[all][test13][quick]") {
+    Executor lisa([](const Executor::OperationStatusEvent &event) {
+        eventHandler(event);
+    });
+    configure(lisa);
+
+    string handle;
+    auto result = lisa.Install("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0", demo_tarball,
+                               "appname", "cat", handle);
+    CATCH_REQUIRE(result == 0);
+    CATCH_REQUIRE_FALSE(handle.empty());
+
+    result = lisa.Cancel(handle);
+    CATCH_REQUIRE(result == 0);
+    CATCH_REQUIRE(waitForEventIncludingAlreadyArrivedOne(30));
+    CATCH_CHECK(last_event_received_.status == Executor::OperationStatus::CANCELLED);
+
+    Filesystem::StorageDetails details;
+    result = lisa.GetStorageDetails("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0", details);
+    CATCH_CHECK(result == 0);
+
+    CATCH_CHECK(countAppsInDB() == 0);
+    CATCH_CHECK(countInstalledAppsInDB() == 0);
+    CATCH_CHECK(!findPathInAppsPath("0/com.rdk.waylandegltest/1.0.0/rootfs/usr/bin/wayland-egl-test"));
+    CATCH_CHECK(!findPathInStoragePath("0/com.rdk.waylandegltest"));
+}
+
+CATCH_TEST_CASE("LISA : basic install progress test", "[all][test14][quick]") {
+    Executor lisa([](const Executor::OperationStatusEvent &event) {
+        eventHandler(event);
+    });
+    configure(lisa);
+
+    string handle;
+    auto result = lisa.Install("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0", demo_tarball,
+                               "appname", "cat", handle);
+    CATCH_REQUIRE(result == 0);
+    CATCH_REQUIRE_FALSE(handle.empty());
+    record_all_events_ = true;
+
+    uint32_t progress = -1;
+    result = lisa.GetProgress(handle, progress);
+    cout << progress << endl;
+    CATCH_CHECK(result == 0);
+    CATCH_CHECK(progress >= 0);
+
+    CATCH_CHECK(waitForEvent(30));
+    CATCH_CHECK(last_event_received_.status == Executor::OperationStatus::SUCCESS);
+
+    int cnt = 0;
+    for(const auto& x: all_events_received_) {
+        if (x.status == Executor::OperationStatus::PROGRESS) {
+            cnt++;
+        }
+    }
+    CATCH_CHECK(cnt > 0);
+
+    record_all_events_ = false;
 }
