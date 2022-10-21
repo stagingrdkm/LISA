@@ -918,7 +918,13 @@ public:
             std::map<std::pair<std::string, std::string>, std::list<AppVersionImpl*>> appsDet;
             for(const auto& app: appsDetailsList)
             {
-                appsDet[{app.type, app.id}].push_back(Core::Service<AppVersionImpl>::Create<AppVersionImpl>(app.version, app.appName, app.category, app.url));
+                if (app.version.empty()) {
+                    appsDet[{app.type, app.id}].clear();
+                } else {
+                    appsDet[{app.type, app.id}].push_back(
+                            Core::Service<AppVersionImpl>::Create<AppVersionImpl>(app.version, app.appName,
+                                                                                  app.category, app.url));
+                }
             }
             std::list<AppImpl*> apps;
             for(const auto& app: appsDet)
