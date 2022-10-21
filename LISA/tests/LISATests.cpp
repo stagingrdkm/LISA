@@ -603,53 +603,71 @@ CATCH_TEST_CASE("LISA : uninstall test (upgrade), followed by full uninstall", "
     CATCH_REQUIRE(waitForEvent(30));
     CATCH_CHECK(last_event_received_.status == Executor::OperationStatus::SUCCESS);
 
-    string uninstall_handle;
-    result = lisa.Uninstall("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0", "upgrade" , uninstall_handle);
-    CATCH_REQUIRE(result == 0);
-    CATCH_REQUIRE_FALSE(uninstall_handle.empty());
-    CATCH_REQUIRE(waitForEvent(30));
-    CATCH_CHECK(last_event_received_.operation == Executor::OperationType::UNINSTALLING);
-    CATCH_CHECK(last_event_received_.status == Executor::OperationStatus::SUCCESS);
+    CATCH_SECTION( "normal case: uninstall  (upgrade) followed by full uninstall" ) {
+        string uninstall_handle;
+        result = lisa.Uninstall("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "1.0.0", "upgrade",
+                                uninstall_handle);
+        CATCH_REQUIRE(result == 0);
+        CATCH_REQUIRE_FALSE(uninstall_handle.empty());
+        CATCH_REQUIRE(waitForEvent(30));
+        CATCH_CHECK(last_event_received_.operation == Executor::OperationType::UNINSTALLING);
+        CATCH_CHECK(last_event_received_.status == Executor::OperationStatus::SUCCESS);
 
-    CATCH_CHECK(countAppsInDB() == 1);
-    CATCH_CHECK(countInstalledAppsInDB() == 0);
-    CATCH_CHECK(!findPathInAppsPath("0/com.rdk.waylandegltest/1.0.0/rootfs/usr/bin/wayland-egl-test"));
-    CATCH_CHECK(findPathInStoragePath("0/com.rdk.waylandegltest"));
+        CATCH_CHECK(countAppsInDB() == 1);
+        CATCH_CHECK(countInstalledAppsInDB() == 0);
+        CATCH_CHECK(!findPathInAppsPath("0/com.rdk.waylandegltest/1.0.0/rootfs/usr/bin/wayland-egl-test"));
+        CATCH_CHECK(findPathInStoragePath("0/com.rdk.waylandegltest"));
 
-    Filesystem::StorageDetails details;
-    result = lisa.GetStorageDetails("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "", details);
-    CATCH_CHECK(result == 0);
-    CATCH_CHECK(details.appPath.empty());
-    CATCH_CHECK(details.persistentPath == (lisa_playground + data_subpath + "/0/com.rdk.waylandegltest/"));
+        Filesystem::StorageDetails details;
+        result = lisa.GetStorageDetails("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "", details);
+        CATCH_CHECK(result == 0);
+        CATCH_CHECK(details.appPath.empty());
+        CATCH_CHECK(details.persistentPath == (lisa_playground + data_subpath + "/0/com.rdk.waylandegltest/"));
 
-    std::vector<DataStorage::AppDetails> appDetails;
-    result = lisa.GetAppDetailsList("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "", "", "", appDetails);
-    CATCH_CHECK(result == 0);
-    CATCH_CHECK(appDetails.size() == 1);
+        std::vector<DataStorage::AppDetails> appDetails;
+        result = lisa.GetAppDetailsList("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "", "", "",
+                                        appDetails);
+        CATCH_CHECK(result == 0);
+        CATCH_CHECK(appDetails.size() == 1);
 
-    uninstall_handle = "";
-    result = lisa.Uninstall("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "", "full" , uninstall_handle);
-    CATCH_REQUIRE(result == 0);
-    CATCH_REQUIRE_FALSE(uninstall_handle.empty());
-    CATCH_REQUIRE(waitForEvent(30));
-    CATCH_CHECK(last_event_received_.operation == Executor::OperationType::UNINSTALLING);
-    CATCH_CHECK(last_event_received_.status == Executor::OperationStatus::SUCCESS);
+        uninstall_handle = "";
+        result = lisa.Uninstall("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "", "full",
+                                uninstall_handle);
+        CATCH_REQUIRE(result == 0);
+        CATCH_REQUIRE_FALSE(uninstall_handle.empty());
+        CATCH_REQUIRE(waitForEvent(30));
+        CATCH_CHECK(last_event_received_.operation == Executor::OperationType::UNINSTALLING);
+        CATCH_CHECK(last_event_received_.status == Executor::OperationStatus::SUCCESS);
 
-    CATCH_CHECK(countAppsInDB() == 0);
-    CATCH_CHECK(countInstalledAppsInDB() == 0);
-    CATCH_CHECK(!findPathInAppsPath("0/com.rdk.waylandegltest/1.0.0/rootfs/usr/bin/wayland-egl-test"));
-    CATCH_CHECK(!findPathInStoragePath("0/com.rdk.waylandegltest"));
+        CATCH_CHECK(countAppsInDB() == 0);
+        CATCH_CHECK(countInstalledAppsInDB() == 0);
+        CATCH_CHECK(!findPathInAppsPath("0/com.rdk.waylandegltest/1.0.0/rootfs/usr/bin/wayland-egl-test"));
+        CATCH_CHECK(!findPathInStoragePath("0/com.rdk.waylandegltest"));
 
-    Filesystem::StorageDetails details2;
-    result = lisa.GetStorageDetails("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "", details2);
-    CATCH_CHECK(result == 0);
-    CATCH_CHECK(details2.appPath.empty());
-    CATCH_CHECK(details2.persistentPath.empty());
+        Filesystem::StorageDetails details2;
+        result = lisa.GetStorageDetails("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "", details2);
+        CATCH_CHECK(result == 0);
+        CATCH_CHECK(details2.appPath.empty());
+        CATCH_CHECK(details2.persistentPath.empty());
 
-    std::vector<DataStorage::AppDetails> appDetails2;
-    result = lisa.GetAppDetailsList("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "", "", "", appDetails2);
-    CATCH_CHECK(result == 0);
-    CATCH_CHECK(appDetails2.size() == 0);
+        std::vector<DataStorage::AppDetails> appDetails2;
+        result = lisa.GetAppDetailsList("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "", "", "",
+                                        appDetails2);
+        CATCH_CHECK(result == 0);
+        CATCH_CHECK(appDetails2.size() == 0);
+    }
+
+    CATCH_SECTION( "special case: trying full uninstall without version specified, when app still installed" ) {
+        string uninstall_handle = "";
+        result = lisa.Uninstall("application/vnd.rdk-app.dac.native", "com.rdk.waylandegltest", "", "full",
+                                uninstall_handle);
+        CATCH_REQUIRE(result == Executor::ReturnCodes::ERROR_WRONG_PARAMS);
+
+        CATCH_CHECK(countAppsInDB() == 1);
+        CATCH_CHECK(countInstalledAppsInDB() == 1);
+        CATCH_CHECK(findPathInAppsPath("0/com.rdk.waylandegltest/1.0.0/rootfs/usr/bin/wayland-egl-test"));
+        CATCH_CHECK(findPathInStoragePath("0/com.rdk.waylandegltest"));
+    }
 }
 
 void outputFile(string path, string contents) {

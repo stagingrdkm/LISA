@@ -216,9 +216,19 @@ uint32_t Executor::Uninstall(const std::string& type,
         return ERROR_WRONG_PARAMS;
     }
 
+    // If an app was uninstalled earlier with uninstallType=upgrade, then the
+    // app record will still be inside the database. Also the data storage dir will
+    // still exist. Allow the uninstallation of these artifacts with "if test" below.
+    // Second "if test" is the uninstallation of the usual case: uninstalling an app
+    // of specific version.
     if (version.empty() && !type.empty() && !id.empty() && uninstallType == "full") {
-        // trying to cleanup storage path and app record?
+        // verify that such an app record exists
         if (dataBase->GetDataPaths(type, id).size() == 0) {
+            return ERROR_WRONG_PARAMS;
+        }
+        // only allowed when no specific version of app installed anymore
+        // if there are: the usual uninstall with a specific version should be called
+        if (dataBase->GetAppsPaths(type, id, "").size() > 0) {
             return ERROR_WRONG_PARAMS;
         }
     } else if (!isAppInstalled(type, id, version)) {
@@ -356,6 +366,7 @@ uint32_t Executor::GetStorageDetails(const std::string& type,
     namespace fs = Filesystem;
 
     try {
+        // if all params are empty then the overall disk usage is calculated
         if(type.empty() && id.empty() && version.empty()) {
             INFO("Calculating overall usage");
             details.appPath = config.getAppsPath();
@@ -363,6 +374,10 @@ uint32_t Executor::GetStorageDetails(const std::string& type,
             details.persistentPath = config.getAppsStoragePath();
             details.persistentUsedKB = std::to_string(fs::getDirectorySpace(config.getAppsStoragePath()) / 1024);
         } else if (!id.empty()) {
+            // When specific id is passed, calculate disk usage for this app.
+            // Type is optional since id is unique and sufficient. But if passed, it must match.
+            // If version is also passed: calculate the app size for this version, else not reported.
+            // Data storage size is always reported because this is version independent
             INFO("Calculating usage for: type = ", type, " id = ", id, " version = ", version);
             if (!version.empty()) {
                 std::vector<std::string> appsPaths = dataBase->GetAppsPaths(type, id, version);
