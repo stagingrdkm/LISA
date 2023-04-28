@@ -208,6 +208,11 @@ private:
                         const std::string& id,
                         const std::string& version);
 
+    void importAnnotations(const std::string& type,
+                           const std::string& id,
+                           const std::string& version,
+                           const std::string& appPath);
+
     void doInstall(std::string type,
                    std::string id,
                    std::string version,

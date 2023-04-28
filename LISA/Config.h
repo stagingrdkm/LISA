@@ -41,6 +41,8 @@ public:
     const std::string& getAppsTmpPath() const;
     const std::string& getAppsPath() const;
     const std::string& getAppsStoragePath() const;
+    const std::string& getAnnotationsFile() const;
+    const std::string& getAnnotationsRegex() const;
 
     friend std::ostream& operator<<(std::ostream& out, const Config& config);
 
@@ -49,6 +51,8 @@ private:
     std::string appsPath{"/mnt/apps/dac/images/"};
     std::string appsTmpPath{"/mnt/apps/dac/images/tmp/"};
     std::string appsStoragePath{"/mnt/data/dac/"};
+    std::string annotationsFile;
+    std::string annotationsRegex;
 };
 
 } // namespace LISA

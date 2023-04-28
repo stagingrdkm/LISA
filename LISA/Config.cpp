@@ -34,6 +34,8 @@ namespace { // anonymous
 const std::string APPS_PATH_KEY_NAME{"appspath"};
 const std::string DB_PATH_KEY_NAME{"dbpath"};
 const std::string DATA_PATH_KEY_NAME{"datapath"};
+const std::string ANNOTATIONS_FILE_KEY_NAME{"annotationsFile"};
+const std::string ANNOTATIONS_REGEX_KEY_NAME{"annotationsRegex"};
 
 void assureEndsWithSlash(std::string& str)
 {
@@ -71,6 +73,12 @@ Config::Config(const std::string& aConfig)
                 appsStoragePath = it->second.get_value<std::string>();
                 assureEndsWithSlash(appsStoragePath);
             }
+            else if (it->first == ANNOTATIONS_FILE_KEY_NAME) {
+                annotationsFile = it->second.get_value<std::string>();
+            }
+            else if (it->first == ANNOTATIONS_REGEX_KEY_NAME) {
+                annotationsRegex = it->second.get_value<std::string>();
+            }
         }
     }
     catch(std::exception& exc) {
@@ -98,10 +106,23 @@ const std::string& Config::getAppsStoragePath() const
     return appsStoragePath;
 }
 
+const std::string& Config::getAnnotationsFile() const
+{
+    return annotationsFile;
+}
+
+const std::string& Config::getAnnotationsRegex() const
+{
+    return annotationsRegex;
+}
+
 std::ostream& operator<<(std::ostream& out, const Config& config)
 {
     return out << "[appsPath: " << config.appsPath << " tmpPath: " << config.appsTmpPath << " appStoragePath: "
-               << config.appsStoragePath << "]";
+               << config.appsStoragePath
+               << " annotationsFile: " << config.annotationsFile
+               << " annotationsRegex: " << config.annotationsRegex
+               << "]";
 };
 
 } // namespace WPEFramework

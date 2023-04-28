@@ -30,7 +30,12 @@
 #include <array>
 #include <cassert>
 #include <random>
-#include <ctime>
+#include <limits>
+#include <fstream>
+#include <regex>
+#include <boost/property_tree/json_parser.hpp>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/filesystem.hpp>
 
 #ifdef UNIT_TESTS
 namespace Core {
@@ -58,12 +63,11 @@ std::string extractFilename(const std::string& uri)
 
 std::string generateHandle()
 {
-    static bool seeded{false};
-    if (!seeded) {
-        seeded = true;
-        std::srand(std::time(nullptr));
-    }
-    return std::to_string(std::rand());
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    static std::uniform_int_distribution<unsigned long> dis(0,  std::numeric_limits<unsigned long>::max());
+
+    return std::to_string(dis(gen));
 }
 
 
@@ -608,6 +612,53 @@ bool Executor::isAppInstalled(const std::string& type,
     return appInstalled;
 }
 
+void Executor::importAnnotations(const std::string& type,
+                                 const std::string& id,
+                                 const std::string& version,
+                                 const std::string& appPath) {
+    if (config.getAnnotationsFile().empty()) {
+        return;
+    }
+
+    boost::filesystem::path filepath = appPath;
+    filepath /= config.getAnnotationsFile();
+    std::ifstream file(filepath.string());
+    if (!file.good()) {
+        return;
+    }
+
+    if (!file.is_open())
+    {
+        ERROR("Failed to open ", filepath.string());
+        return;
+    }
+
+    INFO("Auto importing annotations from ", filepath.string());
+    try {
+        boost::property_tree::ptree pt;
+        boost::property_tree::read_json(file, pt);
+
+        if (pt.count("annotations") > 0) {
+            std::regex pattern(config.getAnnotationsRegex());
+            for (const auto &kvp: pt.get_child("annotations")) {
+                auto& key = kvp.first;
+                auto& value = kvp.second.data();
+
+                if (std::regex_search(key, pattern)) {
+                    INFO("Importing ", key, " = ", value, " as metadata");
+                    try {
+                        dataBase->SetMetadata(type, id, version, key, value);
+                    } catch (std::exception &error) {
+                        ERROR("Unable to save metadata: ", error.what());
+                    }
+                }
+            }
+        }
+    } catch (std::exception &error) {
+        ERROR("Error reading or parsing annotations: ", error.what());
+    }
+}
+
 void Executor::doInstall(std::string type,
                          std::string id,
                          std::string version,
@@ -671,6 +722,9 @@ void Executor::doInstall(std::string type,
     // everything went fine, mark app directories to not be removed
     scopedAppDir.commit();
     scopedAppStorageDir.commit();
+
+    // auto-import annotations as metadata
+    importAnnotations(type, id, version, appsPath);
 
     setProgress(0, OperationStage::FINISHED);
 
