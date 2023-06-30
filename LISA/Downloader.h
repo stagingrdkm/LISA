@@ -20,6 +20,7 @@
 #pragma once
 
 #include "File.h"
+#include "Config.h"
 
 #include <curl/curl.h>
 
@@ -66,7 +67,8 @@ public:
 class Downloader
 {
 public:
-    Downloader(const std::string& uri, DownloaderListener& aListener);
+    Downloader(const std::string& uri, DownloaderListener& aListener,
+               const Config& config);
     Downloader(const Downloader& other) = delete;
     Downloader& operator=(const Downloader& other) = delete;
 
@@ -110,8 +112,8 @@ private:
 
     DownloaderListener& listener;
 
-    // TODO read from config
     std::chrono::seconds retryAfterTime{300};
+    unsigned int retryMaxTimes;
 };
 
 } // namespace LISA

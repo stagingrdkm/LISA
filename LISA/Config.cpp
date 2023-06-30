@@ -36,6 +36,9 @@ const std::string DB_PATH_KEY_NAME{"dbpath"};
 const std::string DATA_PATH_KEY_NAME{"datapath"};
 const std::string ANNOTATIONS_FILE_KEY_NAME{"annotationsFile"};
 const std::string ANNOTATIONS_REGEX_KEY_NAME{"annotationsRegex"};
+const std::string DOWNLOAD_RETRY_AFTER_SECS_KEY_NAME{"downloadRetryAfterSeconds"};
+const std::string DOWNLOAD_RETRY_MAX_TIMES_KEY_NAME{"downloadRetryMaxTimes"};
+const std::string DOWNLOAD_TIMEOUT_SECS_KEY_NAME{"downloadTimeoutSeconds"};
 
 void assureEndsWithSlash(std::string& str)
 {
@@ -79,6 +82,15 @@ Config::Config(const std::string& aConfig)
             else if (it->first == ANNOTATIONS_REGEX_KEY_NAME) {
                 annotationsRegex = it->second.get_value<std::string>();
             }
+            else if (it->first == DOWNLOAD_RETRY_AFTER_SECS_KEY_NAME) {
+                downloadRetryAfterSeconds = it->second.get_value<unsigned int>();
+            }
+            else if (it->first == DOWNLOAD_RETRY_MAX_TIMES_KEY_NAME) {
+                downloadRetryMaxTimes = it->second.get_value<unsigned int>();
+            }
+            else if (it->first == DOWNLOAD_TIMEOUT_SECS_KEY_NAME) {
+                downloadTimeoutSeconds = it->second.get_value<unsigned int>();
+            }
         }
     }
     catch(std::exception& exc) {
@@ -116,13 +128,31 @@ const std::string& Config::getAnnotationsRegex() const
     return annotationsRegex;
 }
 
+unsigned int Config::getDownloadRetryAfterSeconds() const
+{
+    return downloadRetryAfterSeconds;
+}
+
+unsigned int Config::getDownloadRetryMaxTimes() const
+{
+    return downloadRetryMaxTimes;
+}
+
+unsigned int Config::getDownloadTimeoutSeconds() const
+{
+    return downloadTimeoutSeconds;
+}
+
 std::ostream& operator<<(std::ostream& out, const Config& config)
 {
     return out << "[appsPath: " << config.appsPath << " tmpPath: " << config.appsTmpPath << " appStoragePath: "
                << config.appsStoragePath
                << " annotationsFile: " << config.annotationsFile
                << " annotationsRegex: " << config.annotationsRegex
-               << "]";
+               << " downloadRetryAfterSeconds: " << config.downloadRetryAfterSeconds
+               << " downloadRetryMaxTimes: " << config.downloadRetryMaxTimes
+               << " downloadTimeoutSeconds: " << config.downloadTimeoutSeconds
+            << "]";
 };
 
 } // namespace WPEFramework

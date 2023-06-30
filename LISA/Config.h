@@ -43,6 +43,9 @@ public:
     const std::string& getAppsStoragePath() const;
     const std::string& getAnnotationsFile() const;
     const std::string& getAnnotationsRegex() const;
+    unsigned int getDownloadRetryAfterSeconds() const;
+    unsigned int getDownloadRetryMaxTimes() const;
+    unsigned int getDownloadTimeoutSeconds() const;
 
     friend std::ostream& operator<<(std::ostream& out, const Config& config);
 
@@ -53,6 +56,9 @@ private:
     std::string appsStoragePath{"/mnt/data/dac/"};
     std::string annotationsFile;
     std::string annotationsRegex;
+    unsigned int downloadRetryAfterSeconds{2 * 60};
+    unsigned int downloadRetryMaxTimes{1};
+    unsigned int downloadTimeoutSeconds{15 * 60};
 };
 
 } // namespace LISA

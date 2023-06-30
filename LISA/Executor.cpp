@@ -681,7 +681,7 @@ void Executor::doInstall(std::string type,
     auto tmpDirPath = tmpPath + appSubPath;
     Filesystem::ScopedDir scopedTmpDir{tmpDirPath};
 
-    Downloader downloader{url, *this};
+    Downloader downloader{url, *this, config};
 
     auto downloadSize = downloader.getContentLength();
     if (downloadSize == 0) {
