@@ -39,11 +39,15 @@ struct CurlLazyInitializer
 } // namespace anonymous
 
 Downloader::Downloader(const std::string& uri,
-                       DownloaderListener& aListener)
+                       DownloaderListener& aListener,
+                       const Config& config)
                 :
                 listener{aListener}
 {
     static CurlLazyInitializer lazyInit;
+
+    retryAfterTime = std::chrono::seconds(config.getDownloadRetryAfterSeconds());
+    retryMaxTimes = config.getDownloadRetryMaxTimes();
 
     /* init the curl session */
     curl.reset(curl_easy_init());
@@ -55,10 +59,8 @@ Downloader::Downloader(const std::string& uri,
     // needed to make progress callback get called
     curl_easy_setopt(curl.get(), CURLOPT_NOPROGRESS, 0L);
 
-    // TODO read from config
-    auto constexpr DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
     // timeout for whole operation
-    curl_easy_setopt(curl.get(), CURLOPT_TIMEOUT_MS, DEFAULT_TIMEOUT_MS);
+    curl_easy_setopt(curl.get(), CURLOPT_TIMEOUT_MS, config.getDownloadTimeoutSeconds() * 1000);
 
     // parsing header is required "Retry-After" header
     curl_easy_setopt(curl.get(), CURLOPT_HEADERDATA, this);
@@ -116,7 +118,12 @@ void Downloader::performAction()
         if (httpStatus == HTTP_OK) {
             break;
         } else if (httpStatus == HTTP_ACCEPTED) {
-            doRetryWait();
+            if (retryMaxTimes > 0) {
+                retryMaxTimes--;
+                doRetryWait();
+            } else {
+                throw DownloadError("download error failed after max retries");
+            }
         } else {
             std::string message = std::string{"http error "} + std::to_string(httpStatus);
             throw DownloadError(message);

@@ -17,6 +17,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/reporters/catch_reporter_event_listener.hpp>
 #include <catch2/reporters/catch_reporter_registrars.hpp>
+#include <catch2/catch_test_case_info.hpp>
 #include <chrono>
 #include <thread>
 #include <boost/filesystem.hpp>
@@ -51,10 +52,12 @@ static string demo_tarball = "https://gitlab.com/stagingrdkm/bundles/-/raw/main/
 #else
 static string demo_tarball = "http://127.0.0.1:8899/waylandegltest.tar.gz";
 static string demo_tarball2 = "http://127.0.0.1:8899/waylandegltest2.tar.gz";
+
 class TestRunListener : public Catch::EventListenerBase {
 public:
     using Catch::EventListenerBase::EventListenerBase;
-    pid_t httpserver_pid;
+    pid_t httpserver_pid{0};
+    pid_t mock_ws_pid{0};
 
     void testRunStarting(Catch::TestRunInfo const&) override {
         cout << "Starting simple http server..." << endl;
@@ -76,6 +79,54 @@ public:
         cout << "Stopping simple http server..." << endl;
         kill(httpserver_pid, SIGTERM);
     }
+
+    void testCaseStarting(Catch::TestCaseInfo const &info) override {
+        std::string mock_name = "";
+        std::for_each(info.tags.begin(), info.tags.end(), [&mock_name](Catch::Tag ttag) {
+            auto tag = (std::string)ttag.original;
+            auto pos = tag.find("mock=");
+            if (pos != string::npos) {
+                pos += 5;
+                if (tag.length() > pos) {
+                    mock_name = tag.substr(pos, tag.length() - pos);
+                }
+            }
+        });
+
+        if (!mock_name.empty()) {
+            printf("STARTING MOCK: %s\n", mock_name.c_str());
+            start_ws_mock(mock_name.c_str());
+            sleep(1);
+        }
+    }
+
+    void testCaseEnded(Catch::TestCaseStats const &) override {
+        stop_ws_mock();
+        sleep(1);
+    }
+
+    void stop_ws_mock() {
+        if (mock_ws_pid != 0) {
+            printf("Will kill mock %d\n", mock_ws_pid);
+            kill(mock_ws_pid, SIGKILL);
+            mock_ws_pid = 0;
+        }
+    }
+
+    void start_ws_mock(const char *command) {
+        pid_t pid;
+        pid = fork();
+        if (pid < 0)
+            return;
+        else if (pid == 0) {
+            execl(command, command, (char *) NULL);
+            perror("execl");
+            exit(1);
+        }
+        mock_ws_pid = pid;
+        printf("Mock started %d\n", mock_ws_pid);
+    }
+
 };
 CATCH_REGISTER_LISTENER(TestRunListener)
 #endif //USE_INTERNAL_TARBALL
@@ -88,7 +139,10 @@ static void configure(Executor &lisa, std::string annotations_file = "") {
                    "   \"appspath\":\"" + lisa_playground + apps_subpath + "\","
                    "   \"datapath\":\"" + lisa_playground + data_subpath + "\","
                    "   \"annotationsFile\":\"" + annotations_file + "\","
-                   "   \"annotationsRegex\":\"" + annotations_regex + "\" }"
+                   "   \"annotationsRegex\":\"" + annotations_regex + "\","
+                   "   \"downloadRetryAfterSeconds\":" + std::to_string(10) + ","
+                   "   \"downloadRetryMaxTimes\":" +  std::to_string(1) + ","
+                   "   \"downloadTimeoutSeconds\":" +  std::to_string(30) + "}"
                    );
 }
 
@@ -1045,4 +1099,52 @@ CATCH_TEST_CASE("LISA : verify annotations installed with app, other annotations
     CATCH_CHECK(found_requires_ocdm);
     CATCH_CHECK(found_requires_rialto);
     CATCH_CHECK(metadata.metadata.size() == 2);
+}
+
+CATCH_TEST_CASE("LISA : test of downloadRetryAfterSeconds and downloadRetryMaxTimes", "[all][test17][slow][mock=server202.py]") {
+    Executor lisa([](const Executor::OperationStatusEvent &event) {
+        eventHandler(event);
+    });
+    configure(lisa);
+
+    string handle;
+    string demo_tarball_202 = "http://127.0.0.1:8898/waylandegltest.tar.gz";
+    auto result = lisa.Install(DACAPP_MIME, DACAPP_ID, DACAPP_VERSION, demo_tarball_202, "appname", "cat", handle);
+    CATCH_REQUIRE(result == 0);
+    CATCH_REQUIRE_FALSE(handle.empty());
+
+    // should not expect too fast response
+    CATCH_REQUIRE(!waitForEvent(5));
+    // now there should be a response
+    CATCH_REQUIRE(waitForEvent(30));
+    CATCH_CHECK(last_event_received_.operation == Executor::OperationType::INSTALLING);
+    CATCH_CHECK(last_event_received_.status == Executor::OperationStatus::FAILED);
+    CATCH_CHECK(last_event_received_.id == DACAPP_ID);
+    CATCH_CHECK(last_event_received_.type == DACAPP_MIME);
+    CATCH_CHECK(last_event_received_.version == DACAPP_VERSION);
+    CATCH_CHECK(last_event_received_.handle == handle);
+}
+
+CATCH_TEST_CASE("LISA : test of downloadTimeoutSeconds", "[all][test18][slow][mock=servertimeout.py]") {
+    Executor lisa([](const Executor::OperationStatusEvent &event) {
+        eventHandler(event);
+    });
+    configure(lisa);
+
+    string handle;
+    string demo_tarball_timeout = "http://127.0.0.1:8897/waylandegltest.tar.gz";
+    auto result = lisa.Install(DACAPP_MIME, DACAPP_ID, DACAPP_VERSION, demo_tarball_timeout, "appname", "cat", handle);
+    CATCH_REQUIRE(result == 0);
+    CATCH_REQUIRE_FALSE(handle.empty());
+
+    // should not expect too fast response
+    CATCH_REQUIRE(!waitForEvent(15));
+    // now there should be a response
+    CATCH_REQUIRE(waitForEvent(30));
+    CATCH_CHECK(last_event_received_.operation == Executor::OperationType::INSTALLING);
+    CATCH_CHECK(last_event_received_.status == Executor::OperationStatus::FAILED);
+    CATCH_CHECK(last_event_received_.id == DACAPP_ID);
+    CATCH_CHECK(last_event_received_.type == DACAPP_MIME);
+    CATCH_CHECK(last_event_received_.version == DACAPP_VERSION);
+    CATCH_CHECK(last_event_received_.handle == handle);
 }

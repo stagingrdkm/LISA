@@ -27,7 +27,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror -g -O0")
 
 #add_definitions(-DLISA_APPS_GID=0)
 #add_definitions(-DLISA_DATA_GID=0)
-add_definitions(-DUNIT_TESTS -DCATCH_CONFIG_PREFIX_ALL)
+add_definitions(-DUNIT_TESTS -DCATCH_CONFIG_PREFIX_ALL -DCATCH_CONFIG_EXTERNAL_INTERFACES)
 
 include_directories(. ../)
 set(LibArchive_INCLUDE_DIR "/usr/local/opt/libarchive/include")
@@ -77,3 +77,9 @@ add_custom_command(
         COMMAND ${CMAKE_COMMAND} -E copy
         ${CMAKE_SOURCE_DIR}/files/*.tar.gz
         ${CMAKE_CURRENT_BINARY_DIR}/files/)
+
+add_custom_command(
+        TARGET lisa_test POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+        ${CMAKE_SOURCE_DIR}/mock/*.py
+        ${CMAKE_CURRENT_BINARY_DIR}/)
