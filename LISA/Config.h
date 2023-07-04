@@ -56,8 +56,8 @@ private:
     std::string appsStoragePath{"/mnt/data/dac/"};
     std::string annotationsFile;
     std::string annotationsRegex;
-    unsigned int downloadRetryAfterSeconds{2 * 60};
-    unsigned int downloadRetryMaxTimes{1};
+    unsigned int downloadRetryAfterSeconds{30};
+    unsigned int downloadRetryMaxTimes{4};
     unsigned int downloadTimeoutSeconds{15 * 60};
 };
 
