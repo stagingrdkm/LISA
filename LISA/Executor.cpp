@@ -385,6 +385,10 @@ uint32_t Executor::GetStorageDetails(const std::string& type,
             INFO("Calculating usage for: type = ", type, " id = ", id, " version = ", version);
             if (!version.empty()) {
                 std::vector<std::string> appsPaths = dataBase->GetAppsPaths(type, id, version);
+                if (appsPaths.empty()) {
+                    // return error when app not found
+                    return ERROR_WRONG_PARAMS;
+                }
                 unsigned long long appUsedKB{};
                 // In Stage 1 there will be only one entry here
                 for (const auto &i: appsPaths) {

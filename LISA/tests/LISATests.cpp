@@ -270,6 +270,10 @@ CATCH_TEST_CASE("LISA : install app", "[all][test1][quick]") {
     CATCH_CHECK(countInstalledAppsInDB() == 1);
     CATCH_CHECK(findPathInAppsPath("0/com.rdk.waylandegltest/1.0.0/rootfs/usr/bin/wayland-egl-test"));
     CATCH_CHECK(findPathInStoragePath("0/com.rdk.waylandegltest"));
+
+    // check error code in case of app not found
+    result = lisa.GetStorageDetails(DACAPP_MIME, "invalid", DACAPP_VERSION, details);
+    CATCH_REQUIRE(result == Executor::ReturnCodes::ERROR_WRONG_PARAMS);
 }
 
 CATCH_TEST_CASE("LISA : install 2 apps", "[all][test2][quick]") {
