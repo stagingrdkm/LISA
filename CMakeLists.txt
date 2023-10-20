@@ -23,20 +23,10 @@ find_package(WPEFramework)
 # are located in the cmake directory. Include it in the search.
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/")
 
-option(COMCAST_CONFIG "Comcast services configuration" ON)
-if(COMCAST_CONFIG)
-    include(services.cmake)
-endif()
-
 # Library installation section
 string(TOLOWER ${NAMESPACE} STORAGE_DIRECTORY)
 
 # for writing pc and config files
 include(CmakeHelperFunctions)
 
-get_directory_property(SEVICES_DEFINES COMPILE_DEFINITIONS)
-
-# LISA will eventually be moved to its subdirectory in rdkservices repository. For now its 
-# being stored in a separate repository in rdk staging area.
 add_subdirectory(LISA)
-
